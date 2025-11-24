@@ -1,5 +1,5 @@
 const { widget } = figma;
-const { useSyncedState, usePropertyMenu, AutoLayout, Input, Text, SVG, Rectangle } = widget;
+const { useSyncedState, usePropertyMenu, AutoLayout, Input, Text, SVG, Rectangle, Frame } = widget;
 
 // Types
 type BlockType = 'text' | 'todo';
@@ -84,6 +84,7 @@ const themeColors = {
     checkboxFilled: '#B0B0B0',
     todoCompleted: '#B0B0B0',
     addButtonText: '#666666',
+    editIcon: '#3C3C3C',
   },
   light: {
     widgetBg: '#D4E8EA',
@@ -95,6 +96,7 @@ const themeColors = {
     checkboxFilled: '#508B8E',
     todoCompleted: '#6B8285',
     addButtonText: '#6B8285',
+    editIcon: '#98B3B5',
   }
 };
 
@@ -112,7 +114,7 @@ function StickyProWidget() {
     },
   ]);
   const [width, setWidth] = useSyncedState<360 | 480>('width', 360);
-  const [focusedBlockId, setFocusedBlockId] = useSyncedState<string | null>('focusedBlockId', null);
+  const [focusedBlockId, setFocusedBlockId] = useSyncedState<string | null>('focusedBlockId', 'initial-block');
   const [focusedLineId, setFocusedLineId] = useSyncedState<string | null>('focusedLineId', null);
   const [showAddBlockToolbar, setShowAddBlockToolbar] = useSyncedState<boolean>('showAddBlockToolbar', false);
   const [showFormatDropdown, setShowFormatDropdown] = useSyncedState<boolean>('showFormatDropdown', false);
@@ -222,10 +224,7 @@ function StickyProWidget() {
 
   // Handle block deletion
   const deleteBlock = (blockId: string) => {
-    // Prevent deleting if it's the last block
-    if (blocks.length <= 1) {
-      return;
-    }
+
 
     // Clear focus states FIRST if the deleted block was focused
     // This prevents the toolbar from trying to access a deleted block
@@ -525,7 +524,7 @@ function StickyProWidget() {
             fontSize={12}
             fontFamily="Inter"
             fontWeight={400}
-            fill="#666666"
+            fill={colors.addButtonText}
             horizontalAlignText="center"
           >
             + Add new block
@@ -537,14 +536,12 @@ function StickyProWidget() {
       {showAddBlockToolbar && (
         <AutoLayout
           direction="horizontal"
-          spacing={8}
           width="hug-contents"
           positioning="absolute"
-          y={{ type: 'bottom', offset: -44 }}
+          y={{ type: 'bottom', offset: -56 }}
           x={{ type: 'center', offset: 0 }}
         >
-          <AddBlockButton label="+ /Notes" onClick={() => addBlock('text')} />
-          <AddBlockButton label="+ /to-do" onClick={() => addBlock('todo')} />
+          <AddBlockMenu onAddText={() => addBlock('text')} onAddTodo={() => addBlock('todo')} />
         </AutoLayout>
       )}
     </AutoLayout>
@@ -563,24 +560,9 @@ function MainHeading({ value, onChange, width, theme, onFocus }: { value: string
       width={width}
       onClick={onFocus}
     >
-      {/* Custom Placeholder */}
-      {!value && (
-        <Text
-          positioning="absolute"
-          fontSize={16}
-          fontFamily="Inter"
-          fontWeight={600}
-          fill={colors.textPrimary}
-          opacity={colors.placeholderOpacity}
-          width={width}
-        >
-          Add Heading
-        </Text>
-      )}
-
       <Input
         value={value}
-        placeholder=""
+        placeholder="Header"
         onTextEditEnd={(e) => onChange(e.characters)}
         fontSize={16}
         fontFamily="Inter"
@@ -772,7 +754,7 @@ function TextBlock({
                 )}
 
                 <AutoLayout
-                  width={width - (listType !== 'none' ? 48 : 16)}
+                  width="fill-parent"
                   height="hug-contents"
                 >
                   {!line.text && (
@@ -786,7 +768,7 @@ function TextBlock({
                       {index === 0 && (
                         <SVG
                           src={`<svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M11.2332 2.35209C11.4083 2.17699 11.6162 2.0381 11.845 1.94334C12.0737 1.84858 12.3189 1.7998 12.5666 1.7998C12.8142 1.7998 13.0594 1.84858 13.2881 1.94334C13.5169 2.0381 13.7248 2.17699 13.8999 2.35209C14.075 2.52719 14.2139 2.73505 14.3086 2.96383C14.4034 3.1926 14.4522 3.4378 14.4522 3.68542C14.4522 3.93305 14.4034 4.17824 14.3086 4.40702C14.2139 4.63579 14.075 4.84366 13.8999 5.01876L6.06657 12.8521L2.3999 13.8521L3.3999 10.1854L11.2332 2.35209Z" stroke="#3C3C3C" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.2332 2.35209C11.4083 2.17699 11.6162 2.0381 11.845 1.94334C12.0737 1.84858 12.3189 1.7998 12.5666 1.7998C12.8142 1.7998 13.0594 1.84858 13.2881 1.94334C13.5169 2.0381 13.7248 2.17699 13.8999 2.35209C14.075 2.52719 14.2139 2.73505 14.3086 2.96383C14.4034 3.1926 14.4522 3.4378 14.4522 3.68542C14.4522 3.93305 14.4034 4.17824 14.3086 4.40702C14.2139 4.63579 14.075 4.84366 13.8999 5.01876L6.06657 12.8521L2.3999 13.8521L3.3999 10.1854L11.2332 2.35209Z" stroke="${colors.editIcon}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`}
                         />
                       )}
@@ -797,7 +779,7 @@ function TextBlock({
                         fill={{ type: 'solid', color: colors.textPrimary, opacity: colors.placeholderOpacity }}
                         width="fill-parent"
                       >
-                        {index === 0 ? "Add notes" : "Add"}
+                        {index === 0 ? "Type" : "Add"}
                       </Text>
                     </AutoLayout>
                   )}
@@ -839,7 +821,7 @@ function TextBlock({
             >
               <SVG
                 src={`<svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M5.42857 6.57143H2.57143C2.40953 6.57143 2.27391 6.51657 2.16457 6.40686C2.05524 6.29714 2.00038 6.16153 2 6C1.99962 5.83848 2.05448 5.70286 2.16457 5.59314C2.27467 5.48343 2.41029 5.42857 2.57143 5.42857H5.42857V2.57143C5.42857 2.40953 5.48343 2.27391 5.59314 2.16457C5.70286 2.05524 5.83848 2.00038 6 2C6.16153 1.99962 6.29734 2.05448 6.40743 2.16457C6.51753 2.27467 6.57219 2.41029 6.57143 2.57143V5.42857H9.42857C9.59048 5.42857 9.72629 5.48343 9.836 5.59314C9.94572 5.70286 10.0004 5.83848 10 6C9.99962 6.16153 9.94476 6.29734 9.83543 6.40743C9.7261 6.51753 9.59048 6.57219 9.42857 6.57143H6.57143V9.42857C6.57143 9.59048 6.51657 9.72629 6.40686 9.836C6.29714 9.94572 6.16153 10.0004 6 10C5.83848 9.99962 5.70286 9.94476 5.59314 9.83543C5.48343 9.7261 5.42857 9.59048 5.42857 9.42857V6.57143Z" fill="#505050"/>
+<path d="M5.42857 6.57143H2.57143C2.40953 6.57143 2.27391 6.51657 2.16457 6.40686C2.05524 6.29714 2.00038 6.16153 2 6C1.99962 5.83848 2.05448 5.70286 2.16457 5.59314C2.27467 5.48343 2.41029 5.42857 2.57143 5.42857H5.42857V2.57143C5.42857 2.40953 5.48343 2.27391 5.59314 2.16457C5.70286 2.05524 5.83848 2.00038 6 2C6.16153 1.99962 6.29734 2.05448 6.40743 2.16457C6.51753 2.27467 6.57219 2.41029 6.57143 2.57143V5.42857H9.42857C9.59048 5.42857 9.72629 5.48343 9.836 5.59314C9.94572 5.70286 10.0004 5.83848 10 6C9.99962 6.16153 9.94476 6.29734 9.83543 6.40743C9.7261 6.51753 9.59048 6.57219 9.42857 6.57143H6.57143V9.42857C6.57143 9.59048 6.51657 9.72629 6.40686 9.836C6.29714 9.94572 6.16153 10.0004 6 10C5.83848 9.99962 5.70286 9.94476 5.59314 9.83543C5.48343 9.7261 5.42857 9.59048 5.42857 9.42857V6.57143Z" fill="${colors.addButtonText}"/>
 </svg>`}
               />
               <Text fontSize={10} lineHeight={8} fontFamily="Inter" fontWeight={400} fill={colors.addButtonText}>
@@ -932,7 +914,7 @@ function TodoBlock({
           >
             <SVG
               src={`<svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M5.42857 6.57143H2.57143C2.40953 6.57143 2.27391 6.51657 2.16457 6.40686C2.05524 6.29714 2.00038 6.16153 2 6C1.99962 5.83848 2.05448 5.70286 2.16457 5.59314C2.27467 5.48343 2.41029 5.42857 2.57143 5.42857H5.42857V2.57143C5.42857 2.40953 5.48343 2.27391 5.59314 2.16457C5.70286 2.05524 5.83848 2.00038 6 2C6.16153 1.99962 6.29734 2.05448 6.40743 2.16457C6.51753 2.27467 6.57219 2.41029 6.57143 2.57143V5.42857H9.42857C9.59048 5.42857 9.72629 5.48343 9.836 5.59314C9.94572 5.70286 10.0004 5.83848 10 6C9.99962 6.16153 9.94476 6.29734 9.83543 6.40743C9.7261 6.51753 9.59048 6.57219 9.42857 6.57143H6.57143V9.42857C6.57143 9.59048 6.51657 9.72629 6.40686 9.836C6.29714 9.94572 6.16153 10.0004 6 10C5.83848 9.99962 5.70286 9.94476 5.59314 9.83543C5.48343 9.7261 5.42857 9.59048 5.42857 9.42857V6.57143Z" fill="#505050"/>
+<path d="M5.42857 6.57143H2.57143C2.40953 6.57143 2.27391 6.51657 2.16457 6.40686C2.05524 6.29714 2.00038 6.16153 2 6C1.99962 5.83848 2.05448 5.70286 2.16457 5.59314C2.27467 5.48343 2.41029 5.42857 2.57143 5.42857H5.42857V2.57143C5.42857 2.40953 5.48343 2.27391 5.59314 2.16457C5.70286 2.05524 5.83848 2.00038 6 2C6.16153 1.99962 6.29734 2.05448 6.40743 2.16457C6.51753 2.27467 6.57219 2.41029 6.57143 2.57143V5.42857H9.42857C9.59048 5.42857 9.72629 5.48343 9.836 5.59314C9.94572 5.70286 10.0004 5.83848 10 6C9.99962 6.16153 9.94476 6.29734 9.83543 6.40743C9.7261 6.51753 9.59048 6.57219 9.42857 6.57143H6.57143V9.42857C6.57143 9.59048 6.51657 9.72629 6.40686 9.836C6.29714 9.94572 6.16153 10.0004 6 10C5.83848 9.99962 5.70286 9.94476 5.59314 9.83543C5.48343 9.7261 5.42857 9.59048 5.42857 9.42857V6.57143Z" fill="${colors.addButtonText}"/>
 </svg>`}
             />
             <Text fontSize={10} lineHeight={12} fontFamily="Inter" fontWeight={400} fill={colors.addButtonText}>
@@ -1016,23 +998,154 @@ function TodoItem({
 
 
 
-// Add Block Button Component
-function AddBlockButton({ label, onClick }: { label: string; onClick: () => void }) {
+// Add Block Menu Component
+function AddBlockMenu({ onAddText, onAddTodo }: { onAddText: () => void; onAddTodo: () => void }) {
   return (
     <AutoLayout
-      direction="horizontal"
-      spacing={4}
-      padding={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      fill="#2B2B2B"
-      cornerRadius={4}
-      onClick={onClick}
+      name="AddBlock"
+      cornerRadius={8}
+      verticalAlignItems="center"
+      effect={{
+        type: 'drop-shadow',
+        color: { r: 0, g: 0, b: 0, a: 0.2 },
+        offset: { x: 0, y: 4 },
+        blur: 12,
+      }}
     >
-      <Text fontSize={12} fontFamily="Inter" fontWeight={400} fill="#FFFFFF">
-        {label}
-      </Text>
+      <SVG
+        name="Vector 3372"
+        height="fill-parent"
+        src={`<svg height='40' viewBox='0 0 0 40' fill='none' xmlns='http://www.w3.org/2000/svg'>
+<path d='M0 0V40' stroke='#363636' stroke-width='2'/>
+</svg>`}
+      />
+      <AutoLayout
+        name="Notes section"
+        fill="#151515"
+        overflow="visible"
+        spacing={11}
+        padding={{
+          top: 8,
+          right: 12,
+          bottom: 8,
+          left: 8,
+        }}
+        verticalAlignItems="center"
+      >
+        <AutoLayout
+          name="Notes button"
+          fill="#2D2D2D"
+          cornerRadius={4}
+          overflow="visible"
+          spacing={4}
+          padding={{
+            vertical: 4,
+            horizontal: 8,
+          }}
+          height={24}
+          horizontalAlignItems="center"
+          verticalAlignItems="center"
+          onClick={onAddText}
+          hoverStyle={{ fill: "#3D3D3D" }}
+        >
+          <Frame
+            name="Notes"
+            width={12}
+            height={12}
+          >
+            <SVG
+              name="notes icon"
+              width={12}
+              height={12}
+              src={`<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M8.42576 1.76407C8.55708 1.63275 8.71301 1.52858 8.88461 1.45751C9.05613 1.38644 9.24003 1.34985 9.42581 1.34985C9.61151 1.34985 9.79541 1.38644 9.96693 1.45751C10.1385 1.52858 10.2945 1.63275 10.4258 1.76407C10.5571 1.8954 10.6613 2.05129 10.7323 2.22288C10.8034 2.39445 10.84 2.57835 10.84 2.76407C10.84 2.94979 10.8034 3.13368 10.7323 3.30527C10.6613 3.47685 10.5571 3.63275 10.4258 3.76407L4.55078 9.63908L1.80078 10.3891L2.55078 7.63905L8.42576 1.76407Z" stroke="#7BA7AA" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`}
+            />
+          </Frame>
+          <Text
+            name="Notes"
+            fill="#FFF"
+            verticalAlignText="center"
+            lineHeight={24}
+            fontFamily="Inter"
+            fontSize={12}
+            letterSpacing={0.5}
+            fontWeight={500}
+          >
+            Notes
+          </Text>
+        </AutoLayout>
+      </AutoLayout>
+      <SVG
+        name="divider"
+        height="fill-parent"
+        src={`<svg height='40' viewBox='0 0 0 40' fill='none' xmlns='http://www.w3.org/2000/svg'>
+<path d='M0 0V40' stroke='#363636' stroke-width='2'/>
+</svg>`}
+      />
+      <AutoLayout
+        name="To-do section"
+        fill="#151515"
+        overflow="visible"
+        spacing={11}
+        padding={{
+          top: 8,
+          right: 8,
+          bottom: 8,
+          left: 12,
+        }}
+        verticalAlignItems="center"
+      >
+        <AutoLayout
+          name="To do button"
+          fill="#2D2D2D"
+          cornerRadius={4}
+          overflow="visible"
+          spacing={8}
+          padding={{
+            vertical: 4,
+            horizontal: 8,
+          }}
+          height={24}
+          horizontalAlignItems="center"
+          verticalAlignItems="center"
+          onClick={onAddTodo}
+          hoverStyle={{ fill: "#3D3D3D" }}
+        >
+          <Frame
+            name="to do icon"
+            width={12}
+            height={12}
+          >
+            <SVG
+              name="Tick_box"
+              height={12}
+              width={12}
+              src={`<svg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'>
+<path d='M4 5.29087C4.89297 5.98352 5.36411 6.40284 6.09919 7.25455C7.40407 5.49014 9.0131 3.551 10.5 2' stroke='#7BA7AA' stroke-width='1.13455' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M7.5 1.5H3.3C2.30589 1.5 1.5 2.30589 1.5 3.3V8.7C1.5 9.69411 2.30589 10.5 3.3 10.5H8.7C9.69411 10.5 10.5 9.69411 10.5 8.7V5.5' stroke='#7BA7AA' stroke-width='0.9' stroke-linecap='round'/>
+</svg>`}
+            />
+          </Frame>
+          <Text
+            name="To-do"
+            fill="#FFF"
+            verticalAlignText="center"
+            lineHeight={24}
+            fontFamily="Inter"
+            fontSize={12}
+            letterSpacing={0.5}
+            fontWeight={500}
+          >
+            To-do
+          </Text>
+        </AutoLayout>
+      </AutoLayout>
     </AutoLayout>
   );
 }
+
+
 
 // Close Button Component
 function CloseButton({ onClick }: { onClick: () => void }) {
