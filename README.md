@@ -1,36 +1,69 @@
-Below are the steps to get your widget running. You can also find instructions at:
+# Code Editor Pro
 
-https://www.figma.com/widget-docs/setup-guide/
+A Figma widget for editing and displaying code with syntax highlighting.
 
-This widget template uses TypeScript and NPM, two standard tools in creating JavaScript applications.
+## Features
 
-First, download Node.js which comes with NPM. This will allow you to install TypeScript and other
-libraries. You can find the download link here:
+- 🎨 **Syntax Highlighting**: Supports multiple programming languages with color-coded syntax
+- 🌓 **Theme Support**: Toggle between light and dark themes
+- 📏 **Adjustable Width**: Switch between 360px and 480px widget widths
+- ✏️ **Code Editor**: Click to open a full-featured code editor
+- 💾 **Real-time Sync**: Changes in the editor sync back to the widget instantly
 
-https://nodejs.org/en/download/
+## Installation
 
-Next, install TypeScript, esbuild and the latest type definitions by running:
+1. Clone this repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Build the widget:
+   ```bash
+   npm run build
+   ```
+4. In Figma, go to Plugins → Development → Import plugin from manifest
+5. Select the `manifest.json` file from this project
 
-npm install
+## Development
 
-If you are familiar with JavaScript, TypeScript will look very familiar. In fact, valid JavaScript code
-is already valid Typescript code.
+```bash
+# Build the widget
+npm run build
 
-TypeScript adds type annotations to variables. This allows code editors such as Visual Studio Code
-to provide information about the Figma API while you are writing code, as well as help catch bugs
-you previously didn't notice.
+# Watch for changes (if configured)
+npm run watch
+```
 
-For more information, visit https://www.typescriptlang.org/
+## Project Structure
 
-Using TypeScript requires a compiler to convert TypeScript (widget-src/code.tsx) into JavaScript (dist/code.js)
-for the browser to run. We use esbuild to do this for us.
+```
+├── widget-src/
+│   ├── code.tsx       # Main widget code
+│   ├── ui.tsx         # Code editor UI
+│   └── ui.html        # Code editor HTML
+├── dist/              # Built files
+├── manifest.json      # Figma plugin manifest
+└── package.json       # Project dependencies
+```
 
-We recommend writing TypeScript code using Visual Studio code:
+## Usage
 
-1. Download Visual Studio Code if you haven't already: https://code.visualstudio.com/.
-2. Open this directory in Visual Studio Code.
-3. Compile TypeScript to JavaScript: Run the "Terminal > Run Build Task..." menu item,
-   then select "npm: watch". You will have to do this again every time
-   you reopen Visual Studio Code.
+1. Add the widget to your Figma canvas
+2. Click on the code block to open the editor
+3. Write or paste your code
+4. Use the theme toggle to switch between light/dark mode
+5. Use the width toggle to adjust the widget size
 
-That's it! Visual Studio Code will regenerate the JavaScript file every time you save.
+## Technologies
+
+- **Figma Widget API**: For creating the widget interface
+- **TypeScript**: For type-safe development
+- **esbuild**: For fast bundling
+
+## License
+
+MIT
+
+## Author
+
+Built with ❤️ for the Figma community
