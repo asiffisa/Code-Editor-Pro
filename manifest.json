@@ -1,8 +1,9 @@
 {
-  "name": "Sticky Pro",
-  "id": "1572706902278067159",
+  "name": "Code Editor Pro",
+  "id": "1572706902278067160",
   "api": "1.0.0",
   "main": "dist/code.js",
+  "ui": "dist/ui.html",
   "capabilities": [],
   "enableProposedApi": false,
   "documentAccess": "dynamic-page",
@@ -14,7 +15,7 @@
   "widgetApi": "1.0.0",
   "networkAccess": {
     "allowedDomains": [
-      "none"
+      "https://cdnjs.cloudflare.com"
     ]
   }
 }

@@ -1,31 +1,20 @@
 const { widget } = figma;
-const { useSyncedState, usePropertyMenu, AutoLayout, Input, Text, SVG, Rectangle, Frame } = widget;
+const { useSyncedState, usePropertyMenu, AutoLayout, Input, Text: WidgetText, SVG, Rectangle, Frame, useEffect } = widget;
 
 // Types
-type BlockType = 'text' | 'todo' | 'code';
-type TextFormat = 'H1' | 'B1' | 'C1';
-type ListType = 'none' | 'bullet' | 'numbered';
+type BlockType = 'code';
 
-interface TodoItem {
-  id: string;
+interface HighlightedToken {
   text: string;
-  completed: boolean;
-}
-
-interface TextLine {
-  id: string;
-  text: string;
-  format: TextFormat;
+  color: string;
 }
 
 interface Block {
   id: string;
   type: BlockType;
   content: string;
-  format?: TextFormat;
-  listType?: ListType;
-  lines?: TextLine[];  // For multi-line text blocks
-  todos?: TodoItem[];
+  language?: string;
+  highlightedLines?: HighlightedToken[][];
 }
 
 // Generate unique IDs
@@ -33,19 +22,49 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-const bulletIcon = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M2.71429 6.82799C3.10877 6.82799 3.42857 6.50819 3.42857 6.1137C3.42857 5.71921 3.10877 5.39941 2.71429 5.39941C2.3198 5.39941 2 5.71921 2 6.1137C2 6.50819 2.3198 6.82799 2.71429 6.82799Z" fill="white" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M6.42857 6.11426H18.4286" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M2.71429 14.2567C3.10877 14.2567 3.42857 13.9369 3.42857 13.5424C3.42857 13.1479 3.10877 12.8281 2.71429 12.8281C2.3198 12.8281 2 13.1479 2 13.5424C2 13.9369 2.3198 14.2567 2.71429 14.2567Z" fill="white" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M6.42857 13.543H18.4286" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
+function escapeXML(str: string) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
 
-const numberedIcon = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M1.83565 7.49944V4.99248H1V4.5H2.32869V7.5L1.83565 7.49944Z" fill="white"/>
-<path d="M5.32869 6H18.1858" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M1 15V13.6393C1 13.5301 1.03696 13.4385 1.11088 13.3646C1.18481 13.2907 1.27637 13.2535 1.38559 13.2532H2.39302V12.4926H1V12H2.5C2.60921 12 2.70078 12.037 2.7747 12.1109C2.84863 12.1848 2.88577 12.2764 2.88614 12.3856V13.3607C2.88614 13.4699 2.849 13.5615 2.7747 13.6354C2.70041 13.7093 2.60884 13.7465 2.5 13.7468H1.49257V14.5074H2.88559V15H1Z" fill="white"/>
-<path d="M5.88614 13.5H18.7433" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
+function calculateCodeBlockWidth(blockWidth: number): number {
+  // Account for padding (12px left + 12px right) = 24px total
+  return blockWidth - 24;
+}
+
+function splitTokensByWidth(tokens: HighlightedToken[], containerWidth: number): HighlightedToken[][] {
+  // Monospace font (Source Code Pro) at 13px, roughly 7.8px per character average
+  const charWidth = 7.8;
+  const maxCharsPerLine = Math.floor(containerWidth / charWidth);
+
+  if (maxCharsPerLine <= 0) return [tokens];
+
+  const wrappedLines: HighlightedToken[][] = [];
+  let currentLine: HighlightedToken[] = [];
+  let currentLineLength = 0;
+
+  for (const token of tokens) {
+    const tokenLength = token.text.length;
+
+    // Check if adding this token exceeds the line width
+    if (currentLineLength + tokenLength > maxCharsPerLine && currentLine.length > 0) {
+      // Push current line and start a new one
+      wrappedLines.push(currentLine);
+      currentLine = [token];
+      currentLineLength = tokenLength;
+    } else {
+      // Add token to current line
+      currentLine.push(token);
+      currentLineLength += tokenLength;
+    }
+  }
+
+  // Push the last line
+  if (currentLine.length > 0) {
+    wrappedLines.push(currentLine);
+  }
+
+  return wrappedLines.length > 0 ? wrappedLines : [tokens];
+}
 
 const expandIcon = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M14.1 5.43359L17.7929 9.12649C18.1834 9.51701 18.1834 10.1502 17.7929 10.5407L14.1 14.2336" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -72,9 +91,6 @@ const darkThemeIcon = `<svg width="20" height="20" viewBox="0 0 20 20" fill="non
 <path d="M10 17.5C7.91667 17.5 6.14583 16.7708 4.6875 15.3125C3.22917 13.8542 2.5 12.0833 2.5 10C2.5 7.91667 3.22917 6.14583 4.6875 4.6875C6.14583 3.22917 7.91667 2.5 10 2.5C10.1944 2.5 10.3856 2.50694 10.5733 2.52083C10.7611 2.53472 10.945 2.55556 11.125 2.58333C10.5556 2.98611 10.1006 3.51056 9.76 4.15667C9.41944 4.80278 9.24944 5.50056 9.25 6.25C9.25 7.5 9.6875 8.5625 10.5625 9.4375C11.4375 10.3125 12.5 10.75 13.75 10.75C14.5139 10.75 15.2153 10.5797 15.8542 10.2392C16.4931 9.89861 17.0139 9.44389 17.4167 8.875C17.4444 9.05555 17.4653 9.23944 17.4792 9.42667C17.4931 9.61389 17.5 9.805 17.5 10C17.5 12.0833 16.7708 13.8542 15.3125 15.3125C13.8542 16.7708 12.0833 17.5 10 17.5ZM10 15.8333C11.2222 15.8333 12.3194 15.4964 13.2917 14.8225C14.2639 14.1486 14.9722 13.2703 15.4167 12.1875C15.1389 12.2569 14.8611 12.3125 14.5833 12.3542C14.3056 12.3958 14.0278 12.4167 13.75 12.4167C12.0417 12.4167 10.5867 11.8158 9.385 10.6142C8.18333 9.4125 7.58278 7.95778 7.58333 6.25C7.58333 5.97222 7.60417 5.69444 7.64583 5.41667C7.6875 5.13889 7.74306 4.86111 7.8125 4.58333C6.72917 5.02778 5.85056 5.73611 5.17667 6.70833C4.50278 7.68056 4.16611 8.77778 4.16667 10C4.16667 11.6111 4.73611 12.9861 5.875 14.125C7.01389 15.2639 8.38889 15.8333 10 15.8333Z" fill="white"/>
 </svg>` ;
 
-const codeIcon = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M1.87812 6.51925L4.10407 8.94362C4.20939 9.05833 4.26204 9.20431 4.26204 9.38158C4.26204 9.55884 4.20939 9.70482 4.10407 9.81953C3.99876 9.93423 3.86472 9.99158 3.70196 9.99158C3.53921 9.99158 3.40517 9.93423 3.29986 9.81953L0.657432 6.94156C0.599988 6.879 0.559203 6.81122 0.535076 6.73823C0.51095 6.66523 0.499269 6.58703 0.500035 6.50361C0.500801 6.42019 0.512864 6.34198 0.536225 6.26899C0.559586 6.196 0.600179 6.12822 0.658006 6.06566L3.30043 3.18769C3.41532 3.06256 3.55184 3 3.71001 3C3.86817 3 4.0045 3.06256 4.11901 3.18769C4.23351 3.31282 4.29096 3.46152 4.29134 3.63378C4.29172 3.80604 4.23428 3.95453 4.11901 4.07924L1.87812 6.51925ZM10.1213 6.48797L7.89538 4.0636C7.79006 3.94889 7.73741 3.80291 7.73741 3.62564C7.73741 3.44838 7.79006 3.30239 7.89538 3.18769C8.00069 3.07299 8.13473 3.01564 8.29749 3.01564C8.46024 3.01564 8.59428 3.07299 8.69959 3.18769L11.342 6.06566C11.3995 6.12822 11.4402 6.196 11.4644 6.26899C11.4885 6.34198 11.5004 6.42019 11.5 6.50361C11.4996 6.58703 11.4877 6.66523 11.4644 6.73823C11.441 6.81122 11.4002 6.879 11.342 6.94156L8.69959 9.81953C8.58471 9.94466 8.45067 10.0047 8.29749 9.99971C8.1443 9.99471 8.01027 9.92943 7.89538 9.80389C7.78049 9.67834 7.72305 9.52985 7.72305 9.35843C7.72305 9.187 7.78049 9.03831 7.89538 8.91234L10.1213 6.48797Z" fill="#7BA7AA"/>
-</svg>`;
 
 // Theme colors
 const themeColors = {
@@ -83,96 +99,37 @@ const themeColors = {
     blockBg: '#1A1A1A',
     textPrimary: '#FFFFFF',
     textSecondary: '#505050',
-    placeholderOpacity: 0.10,
-    checkboxStroke: '#626262',
-    checkboxFilled: '#B0B0B0',
-    todoCompleted: '#B0B0B0',
-    addButtonText: '#666666',
-    editIcon: '#3C3C3C',
   },
   light: {
     widgetBg: '#D4E8EA',
     blockBg: '#B8D9DC',
     textPrimary: '#1A1A1A',
     textSecondary: '#6B8285',
-    placeholderOpacity: 0.2,
-    checkboxStroke: '#508B8E',
-    checkboxFilled: '#508B8E',
-    todoCompleted: '#6B8285',
-    addButtonText: '#6B8285',
-    editIcon: '#98B3B5',
   }
 };
 
 // Main Widget Component
-function StickyProWidget() {
+function CodeEditorProWidget() {
   const [mainHeading, setMainHeading] = useSyncedState<string>('mainHeading', '');
   const [blocks, setBlocks] = useSyncedState<Block[]>('blocks', [
     {
       id: 'initial-block',
-      type: 'text',
+      type: 'code',
       content: '',
-      format: 'B1',
-      listType: 'none',
-      lines: [{ id: 'initial-line', text: '', format: 'B1' }],
+      language: 'javascript',
     },
   ]);
-  const [width, setWidth] = useSyncedState<360 | 480>('width', 360);
+  const [width, setWidth] = useSyncedState<360 | 480>('width', 480);
   const [focusedBlockId, setFocusedBlockId] = useSyncedState<string | null>('focusedBlockId', 'initial-block');
-  const [focusedLineId, setFocusedLineId] = useSyncedState<string | null>('focusedLineId', null);
-  const [showAddBlockToolbar, setShowAddBlockToolbar] = useSyncedState<boolean>('showAddBlockToolbar', false);
-  const [showFormatDropdown, setShowFormatDropdown] = useSyncedState<boolean>('showFormatDropdown', false);
   const [theme, setTheme] = useSyncedState<'dark' | 'light'>('theme', 'dark');
 
   // Get focused block
   const focusedBlock = blocks.find((b) => b.id === focusedBlockId);
 
-  // Get focused line for formatting
-  const focusedLine = focusedBlock?.lines?.find((l) => l.id === focusedLineId);
-
   // Property Menu for native Figma toolbar
   // Note: The position of this menu is controlled by Figma and cannot be changed.
   usePropertyMenu(
     [
-      // Text format buttons (only for text blocks)
-      ...(focusedBlock?.type === 'text' ? [
-        {
-          itemType: 'action' as const,
-          tooltip: 'H1',
-          propertyName: 'format-h1',
-        },
-        {
-          itemType: 'action' as const,
-          tooltip: 'B1',
-          propertyName: 'format-b1',
-        },
-        {
-          itemType: 'action' as const,
-          tooltip: 'C1',
-          propertyName: 'format-c1',
-        },
-        {
-          itemType: 'separator' as const,
-        },
-        {
-          itemType: 'toggle' as const,
-          tooltip: 'Bullet List',
-          propertyName: 'list-bullet',
-          isToggled: (focusedBlock?.listType || 'none') === 'bullet',
-          icon: bulletIcon,
-        },
-        {
-          itemType: 'toggle' as const,
-          tooltip: 'Numbered List',
-          propertyName: 'list-numbered',
-          isToggled: (focusedBlock?.listType || 'none') === 'numbered',
-          icon: numberedIcon,
-        },
-        {
-          itemType: 'separator' as const,
-        },
-      ] : []),
-      // Theme and Width toggle (for all blocks when focused)
       // Theme and Width toggle (always visible)
       {
         itemType: 'action' as const,
@@ -202,40 +159,14 @@ function StickyProWidget() {
         setTheme(theme === 'dark' ? 'light' : 'dark');
         return;
       }
-
-      if (!focusedBlockId || !focusedBlock) return;
-
-      // Handle format changes
-      if (propertyName === 'format-h1' || propertyName === 'format-b1' || propertyName === 'format-c1') {
-        const format = propertyName.split('-')[1].toUpperCase() as TextFormat;
-        if (focusedLineId) {
-          updateLineFormat(focusedBlockId, focusedLineId, format);
-        } else {
-          updateBlockFormat(focusedBlockId, format);
-        }
-      }
-
-      // Handle list type changes
-      if (propertyName === 'list-bullet') {
-        const newListType = (focusedBlock.listType || 'none') === 'bullet' ? 'none' : 'bullet';
-        updateBlockListType(focusedBlockId, newListType);
-      }
-      if (propertyName === 'list-numbered') {
-        const newListType = (focusedBlock.listType || 'none') === 'numbered' ? 'none' : 'numbered';
-        updateBlockListType(focusedBlockId, newListType);
-      }
     }
   );
 
   // Handle block deletion
   const deleteBlock = (blockId: string) => {
-
-
-    // Clear focus states FIRST if the deleted block was focused
-    // This prevents the toolbar from trying to access a deleted block
+    // Clear focus state if the deleted block was focused
     if (focusedBlockId === blockId) {
       setFocusedBlockId(null);
-      setFocusedLineId(null);
     }
 
     // Then delete the block
@@ -243,116 +174,11 @@ function StickyProWidget() {
     setBlocks(newBlocks);
   };
 
-  // Handle adding new block
-  const addBlock = (type: BlockType) => {
-    const blockId = generateId();
-    const newBlock: Block = {
-      id: blockId,
-      type,
-      content: '',
-      ...(type === 'text' && {
-        format: 'B1',
-        listType: 'none',
-        lines: [{ id: generateId(), text: '', format: 'B1' }]
-      }),
-      ...(type === 'todo' && {
-        todos: [{ id: generateId(), text: '', completed: false }]
-      }),
-    };
 
-    setBlocks([...blocks, newBlock]);
-    setFocusedBlockId(blockId);
-    setShowAddBlockToolbar(false);
-  };
-
-  // Add line to text block
-  const addLineToBlock = (blockId: string, afterLineId?: string) => {
-    setBlocks(
-      blocks.map((b) => {
-        if (b.id === blockId && (b.type === 'text' || b.type === 'code')) {
-          const lines = b.lines || [{ id: generateId(), text: b.content || '', format: b.format || 'B1' }];
-          const newLine: TextLine = {
-            id: generateId(),
-            text: '',
-            format: lines[lines.length - 1]?.format || 'B1',
-          };
-
-          if (afterLineId) {
-            const index = lines.findIndex(l => l.id === afterLineId);
-            const newLines = [
-              ...lines.slice(0, index + 1),
-              newLine,
-              ...lines.slice(index + 1),
-            ];
-            return { ...b, lines: newLines };
-          }
-
-          return { ...b, lines: [...lines, newLine] };
-        }
-        return b;
-      })
-    );
-  };
-
-  // Update line in text block
-  const updateLineInBlock = (blockId: string, lineId: string, text: string) => {
-    setBlocks(
-      blocks.map((b) => {
-        if (b.id === blockId && (b.type === 'text' || b.type === 'code')) {
-          const lines = b.lines || [];
-          return {
-            ...b,
-            lines: lines.map(l => l.id === lineId ? { ...l, text } : l)
-          };
-        }
-        return b;
-      })
-    );
-  };
-
-  // Update line format in text block
-  const updateLineFormat = (blockId: string, lineId: string, format: TextFormat) => {
-    setBlocks(
-      blocks.map((b) => {
-        if (b.id !== blockId || (b.type !== 'text' && b.type !== 'code')) return b;
-        return {
-          ...b,
-          lines: (b.lines || []).map(l => l.id === lineId ? { ...l, format } : l)
-        };
-      })
-    );
-  };
-
-  // Delete line from text block
-  const deleteLineFromBlock = (blockId: string, lineId: string) => {
-    setBlocks(
-      blocks.map((b) => {
-        if (b.id !== blockId || (b.type !== 'text' && b.type !== 'code')) return b;
-
-        const lines = (b.lines || []).filter(l => l.id !== lineId);
-        // If no lines left, keep at least one empty line
-        return {
-          ...b,
-          lines: lines.length === 0 ? [{ id: generateId(), text: '', format: 'B1' }] : lines
-        };
-      })
-    );
-  };
 
   // Update block content
-  const updateBlockContent = (blockId: string, content: string) => {
-    setBlocks(blocks.map((b) => b.id === blockId ? { ...b, content } : b));
-  };
-
-  // Update block format
-  const updateBlockFormat = (blockId: string, format: TextFormat) => {
-    setBlocks(blocks.map((b) => b.id === blockId ? { ...b, format } : b));
-    setShowFormatDropdown(false);
-  };
-
-  // Update block list type
-  const updateBlockListType = (blockId: string, listType: ListType) => {
-    setBlocks(blocks.map((b) => b.id === blockId ? { ...b, listType } : b));
+  const updateBlockContent = (blockId: string, content: string, highlightedLines?: HighlightedToken[][]) => {
+    setBlocks(blocks.map((b) => b.id === blockId ? { ...b, content, highlightedLines } : b));
   };
 
   // Toggle width
@@ -360,95 +186,40 @@ function StickyProWidget() {
     setWidth(width === 360 ? 480 : 360);
   };
 
-  // Add todo item
-  const addTodoItem = (blockId: string) => {
-    setBlocks(
-      blocks.map((b) => {
-        if (b.id !== blockId || b.type !== 'todo') return b;
-        const newTodo: TodoItem = {
-          id: generateId(),
-          text: '',
-          completed: false,
-        };
-        return { ...b, todos: [...(b.todos || []), newTodo] };
-      })
-    );
-  };
-
-  // Update todo item
-  const updateTodoItem = (blockId: string, todoId: string, text: string) => {
-    setBlocks(
-      blocks.map((b) => {
-        if (b.id !== blockId || b.type !== 'todo') return b;
-        return {
-          ...b,
-          todos: (b.todos || []).map((t) => t.id === todoId ? { ...t, text } : t)
-        };
-      })
-    );
-  };
-
-  // Toggle todo completion
-  const toggleTodoCompletion = (blockId: string, todoId: string) => {
-    setBlocks(
-      blocks.map((b) => {
-        if (b.id !== blockId || b.type !== 'todo') return b;
-        return {
-          ...b,
-          todos: (b.todos || []).map((t) => t.id === todoId ? { ...t, completed: !t.completed } : t)
-        };
-      })
-    );
-  };
-
-  // Insert block after a specific block
-  const insertBlockAfter = (blockId: string) => {
-    const blockIndex = blocks.findIndex((b) => b.id === blockId);
-    if (blockIndex === -1) return;
-
-    const newBlock: Block = {
-      id: generateId(),
-      type: 'text',
-      content: '',
-      format: 'B1',
-      listType: 'none',
-      lines: [{ id: generateId(), text: '', format: 'B1' }],
+  // Handle messages from UI
+  useEffect(() => {
+    figma.ui.onmessage = (msg) => {
+      console.log('Widget received message:', msg);
+      if (msg.type === 'UPDATE_CODE') {
+        const { code, highlightedLines } = msg;
+        console.log('Updating code for block:', focusedBlockId, 'Code length:', code?.length);
+        if (focusedBlockId) {
+          updateBlockContent(focusedBlockId, code, highlightedLines);
+        }
+      } else if (msg.type === 'UPDATE_LANGUAGE') {
+        const { language, highlightedLines } = msg;
+        if (focusedBlockId) {
+          setBlocks((prev) =>
+            prev.map((b) => (b.id === focusedBlockId ? { ...b, language, highlightedLines } : b))
+          );
+        }
+      }
     };
+  });
 
-    const newBlocks = [
-      ...blocks.slice(0, blockIndex + 1),
-      newBlock,
-      ...blocks.slice(blockIndex + 1),
-    ];
-    setBlocks(newBlocks);
-  };
+  const openCodeEditor = (blockId: string, content: string, language: string = 'javascript') => {
+    return new Promise<void>((resolve) => {
+      // Show UI using the html file from manifest
+      figma.showUI(__html__, { width: 800, height: 500 });
 
-  // Insert todo item after a specific todo
-  const insertTodoAfter = (blockId: string, todoId: string) => {
-    setBlocks(
-      blocks.map((b) => {
-        if (b.id !== blockId || b.type !== 'todo') return b;
-
-        const todos = b.todos || [];
-        const todoIndex = todos.findIndex((t) => t.id === todoId);
-        if (todoIndex === -1) return b;
-
-        const newTodo: TodoItem = {
-          id: generateId(),
-          text: '',
-          completed: false,
-        };
-
-        return {
-          ...b,
-          todos: [
-            ...todos.slice(0, todoIndex + 1),
-            newTodo,
-            ...todos.slice(todoIndex + 1),
-          ]
-        };
-      })
-    );
+      // Send initial data after a short delay to ensure UI is ready
+      setTimeout(() => {
+        figma.ui.postMessage({
+          type: 'INIT',
+          payload: { code: content, language, theme }
+        });
+      }, 100);
+    });
   };
 
   // Get current theme colors
@@ -481,7 +252,6 @@ function StickyProWidget() {
           theme={theme}
           onFocus={() => {
             setFocusedBlockId(null);
-            setFocusedLineId(null);
           }}
         />
 
@@ -495,64 +265,16 @@ function StickyProWidget() {
             isFocused={focusedBlockId === block.id}
             theme={theme}
             onFocus={() => {
-              // Only update if actually changing blocks for better performance
               if (focusedBlockId !== block.id) {
-                setFocusedLineId(null);
                 setFocusedBlockId(block.id);
               }
             }}
-            onBlur={() => setFocusedBlockId(null)}
+            onOpenEditor={() => openCodeEditor(block.id, block.content, block.language)}
             onDelete={() => deleteBlock(block.id)}
-            onContentChange={(content) => updateBlockContent(block.id, content)}
-            onInsertAfter={() => insertBlockAfter(block.id)}
-            onAddLine={(afterLineId) => addLineToBlock(block.id, afterLineId)}
-            onUpdateLine={(lineId, text) => updateLineInBlock(block.id, lineId, text)}
-            onUpdateLineFormat={(lineId, format) => updateLineFormat(block.id, lineId, format)}
-            onDeleteLine={(lineId) => deleteLineFromBlock(block.id, lineId)}
-            onLineClick={(lineId) => setFocusedLineId(lineId)}
-            onAddTodo={() => addTodoItem(block.id)}
-            onUpdateTodo={(todoId, text) => updateTodoItem(block.id, todoId, text)}
-            onToggleTodo={(todoId) => toggleTodoCompletion(block.id, todoId)}
-            onInsertTodoAfter={(todoId) => insertTodoAfter(block.id, todoId)}
           />
         ))}
 
-        {/* Add Block Button */}
-        <AutoLayout
-          direction="horizontal"
-          spacing={6}
-          padding={{ top: 12, bottom: 0, left: 0, right: 0 }}
-          width="hug-contents"
-          onClick={() => setShowAddBlockToolbar(!showAddBlockToolbar)}
-        >
-          <Text
-            fontSize={12}
-            fontFamily="Inter"
-            fontWeight={400}
-            fill={colors.addButtonText}
-            horizontalAlignText="center"
-          >
-            + Add new block
-          </Text>
-        </AutoLayout>
       </AutoLayout>
-
-      {/* Add Block Menu - Positioned at bottom with 32px gap */}
-      {showAddBlockToolbar && (
-        <AutoLayout
-          direction="horizontal"
-          width="hug-contents"
-          positioning="absolute"
-          y={{ type: 'bottom', offset: -56 }}
-          x={{ type: 'center', offset: 0 }}
-        >
-          <AddBlockMenu
-            onAddText={() => addBlock('text')}
-            onAddTodo={() => addBlock('todo')}
-            onAddCode={() => addBlock('code')}
-          />
-        </AutoLayout>
-      )}
     </AutoLayout>
   );
 }
@@ -587,90 +309,121 @@ function MainHeading({ value, onChange, width, theme, onFocus }: { value: string
   );
 }
 
-// Block Component
+// Code Block Component
 function BlockComponent({
   block,
   width,
   isFirst,
-  onFocus,
-  onBlur,
-  onDelete,
-  onContentChange,
-  onInsertAfter,
-  onAddLine,
-  onUpdateLine,
-  onUpdateLineFormat,
-  onDeleteLine,
-  onLineClick,
-  onAddTodo,
-  onUpdateTodo,
-  onToggleTodo,
-  onInsertTodoAfter,
   isFocused,
   theme,
+  onFocus,
+  onDelete,
+  onOpenEditor,
 }: {
   block: Block;
   width: number;
   isFirst: boolean;
-  isFocused?: boolean;
+  isFocused: boolean;
   theme: 'dark' | 'light';
   onFocus: () => void;
-  onBlur: () => void;
   onDelete: () => void;
-  onContentChange: (content: string) => void;
-  onInsertAfter?: () => void;
-  onAddLine?: (afterLineId: string) => void;
-  onUpdateLine?: (lineId: string, text: string) => void;
-  onUpdateLineFormat?: (lineId: string, format: TextFormat) => void;
-  onDeleteLine?: (lineId: string) => void;
-  onLineClick?: (lineId: string) => void;
-  onAddTodo?: () => void;
-  onUpdateTodo?: (todoId: string, text: string) => void;
-  onToggleTodo?: (todoId: string) => void;
-  onInsertTodoAfter?: (todoId: string) => void;
+  onOpenEditor: () => void;
 }) {
-  if (block.type === 'text' || block.type === 'code') {
-    return (
-      <TextBlock
-        block={block}
-        width={width}
-        isFirst={isFirst}
-        isFocused={!!isFocused}
-        theme={theme}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        onDelete={onDelete}
-        onContentChange={onContentChange}
-        onInsertAfter={onInsertAfter}
-        onAddLine={onAddLine}
-        onUpdateLine={onUpdateLine}
-        onUpdateLineFormat={onUpdateLineFormat}
-        onDeleteLine={onDeleteLine}
-        onLineClick={onLineClick}
-      />
-    );
-  } else {
-    return (
-      <TodoBlock
-        block={block}
-        width={width}
-        isFirst={isFirst}
-        isFocused={!!isFocused}
-        theme={theme}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        onDelete={onDelete}
-        onAddTodo={onAddTodo!}
-        onUpdateTodo={onUpdateTodo!}
-        onToggleTodo={onToggleTodo!}
-        onInsertTodoAfter={onInsertTodoAfter!}
-      />
-    );
-  }
+  const colors = themeColors[theme];
+
+  return (
+    <AutoLayout
+      direction="horizontal"
+      spacing={0}
+      width={width}
+      padding={{ top: isFirst ? 0 : 8, bottom: 8, left: 0, right: 0 }}
+      overflow="visible"
+    >
+      <AutoLayout
+        direction="vertical"
+        spacing={4}
+        width="fill-parent"
+        padding={{ left: 12, right: 12, top: 12, bottom: 12 }}
+        fill={colors.blockBg}
+        cornerRadius={10}
+        overflow="visible"
+        onClick={onFocus}
+      >
+        {/* Close button */}
+        {isFocused && <CloseButton onClick={onDelete} />}
+
+        {block.highlightedLines ? (
+          <AutoLayout
+            direction="vertical"
+            spacing={2}
+            width="fill-parent"
+            onClick={() => {
+              onFocus();
+              if (onOpenEditor) return onOpenEditor();
+            }}
+          >
+            {block.highlightedLines.map((line, lineIndex) => {
+              // Calculate available width and split long lines
+              const containerWidth = calculateCodeBlockWidth(width);
+              const wrappedLines = splitTokensByWidth(line, containerWidth);
+
+              return wrappedLines.map((wrappedLine, wrapIndex) => (
+                <AutoLayout
+                  key={`line-${lineIndex}-wrap-${wrapIndex}`}
+                  direction="horizontal"
+                  spacing={0}
+                  width="fill-parent"
+                  height="hug-contents"
+                >
+                  {wrappedLine.length > 0 ? (
+                    <SVG
+                      width="fill-parent"
+                      height={18}
+                      src={`
+                        <svg width="100%" height="18" xmlns="http://www.w3.org/2000/svg">
+                          <text x="0" y="14" style="font-family: 'Source Code Pro', monospace; font-size: 13px; white-space: pre;">
+                            ${wrappedLine.map(token => `<tspan fill="${token.color}">${escapeXML(token.text)}</tspan>`).join('')}
+                          </text>
+                        </svg>
+                      `}
+                    />
+                  ) : (
+                    <WidgetText
+                      fontSize={13}
+                      fontFamily="Source Code Pro"
+                      fontWeight={400}
+                      fill={colors.textSecondary}
+                      height={18}
+                    >
+                      {' '}
+                    </WidgetText>
+                  )}
+                </AutoLayout>
+              ));
+            })}
+          </AutoLayout>
+        ) : (
+          <WidgetText
+            fontSize={14}
+            fontFamily="Source Code Pro"
+            fontWeight={400}
+            fill={block.content ? colors.textPrimary : colors.textSecondary}
+            width="fill-parent"
+            onClick={() => {
+              onFocus();
+              if (onOpenEditor) return onOpenEditor();
+            }}
+          >
+            {block.content || '<Type code>'}
+          </WidgetText>
+        )}
+      </AutoLayout>
+    </AutoLayout>
+  );
 }
 
-// Text Block Component
-function TextBlock({
+
+function WidgetTextBlock({
   block,
   width,
   isFirst,
@@ -686,6 +439,7 @@ function TextBlock({
   onUpdateLineFormat,
   onDeleteLine,
   onLineClick,
+  onOpenEditor,
 }: {
   block: Block;
   width: number;
@@ -702,6 +456,7 @@ function TextBlock({
   onUpdateLineFormat?: (lineId: string, format: TextFormat) => void;
   onDeleteLine?: (lineId: string) => void;
   onLineClick?: (lineId: string) => void;
+  onOpenEditor?: () => Promise<void> | void;
 }) {
   const colors = themeColors[theme];
 
@@ -728,22 +483,71 @@ function TextBlock({
           {/* Close button */}
           {isFocused && <CloseButton onClick={onDelete} />}
 
-          <Input
-            inputBehavior="multiline"
-            placeholder="<Type code>"
-            value={block.content}
-            onTextEditEnd={(e) => onContentChange(e.characters)}
-            onClick={onFocus}
-            fontSize={14}
-            fontFamily="IBM Plex Mono"
-            fontWeight={400}
-            fill={colors.textPrimary}
-            width="fill-parent"
-            inputFrameProps={{
-              fill: '#00000000',
-              padding: 0,
-            }}
-          />
+          {block.highlightedLines ? (
+            <AutoLayout
+              direction="vertical"
+              spacing={2}
+              width="fill-parent"
+              onClick={() => {
+                onFocus();
+                if (onOpenEditor) return onOpenEditor();
+              }}
+            >
+              {block.highlightedLines.map((line, lineIndex) => {
+                // Calculate available width and split long lines
+                const containerWidth = calculateCodeBlockWidth(width);
+                const wrappedLines = splitTokensByWidth(line, containerWidth);
+
+                return wrappedLines.map((wrappedLine, wrapIndex) => (
+                  <AutoLayout
+                    key={`line-${lineIndex}-wrap-${wrapIndex}`}
+                    direction="horizontal"
+                    spacing={0}
+                    width="fill-parent"
+                    height="hug-contents"
+                  >
+                    {wrappedLine.length > 0 ? (
+                      <SVG
+                        width="fill-parent"
+                        height={18}
+                        src={`
+                          <svg width="100%" height="18" xmlns="http://www.w3.org/2000/svg">
+                            <text x="0" y="14" style="font-family: 'Source Code Pro', monospace; font-size: 13px; white-space: pre;">
+                              ${wrappedLine.map(token => `<tspan fill="${token.color}">${escapeXML(token.text)}</tspan>`).join('')}
+                            </text>
+                          </svg>
+                        `}
+                      />
+                    ) : (
+                      <WidgetText
+                        fontSize={13}
+                        fontFamily="Source Code Pro"
+                        fontWeight={400}
+                        fill={colors.textSecondary}
+                        height={18}
+                      >
+                        {' '}
+                      </WidgetText>
+                    )}
+                  </AutoLayout>
+                ));
+              })}
+            </AutoLayout>
+          ) : (
+            <WidgetText
+              fontSize={14}
+              fontFamily="Source Code Pro"
+              fontWeight={400}
+              fill={block.content ? colors.textPrimary : colors.textSecondary}
+              width="fill-parent"
+              onClick={() => {
+                onFocus();
+                if (onOpenEditor) return onOpenEditor();
+              }}
+            >
+              {block.content || '<Type code>'}
+            </WidgetText>
+          )}
         </AutoLayout>
       </AutoLayout>
     );
@@ -794,7 +598,7 @@ function TextBlock({
               >
                 {/* List Marker */}
                 {listType !== 'none' && (
-                  <Text
+                  <WidgetText
                     fontSize={fontSize}
                     fontFamily="Inter"
                     fontWeight={fontWeight as 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900}
@@ -803,7 +607,7 @@ function TextBlock({
                     horizontalAlignText="right"
                   >
                     {listType === 'bullet' ? '•' : `${index + 1}.`}
-                  </Text>
+                  </WidgetText>
                 )}
 
                 <AutoLayout
@@ -854,9 +658,9 @@ function TextBlock({
 <path d="M5.42857 6.57143H2.57143C2.40953 6.57143 2.27391 6.51657 2.16457 6.40686C2.05524 6.29714 2.00038 6.16153 2 6C1.99962 5.83848 2.05448 5.70286 2.16457 5.59314C2.27467 5.48343 2.41029 5.42857 2.57143 5.42857H5.42857V2.57143C5.42857 2.40953 5.48343 2.27391 5.59314 2.16457C5.70286 2.05524 5.83848 2.00038 6 2C6.16153 1.99962 6.29734 2.05448 6.40743 2.16457C6.51753 2.27467 6.57219 2.41029 6.57143 2.57143V5.42857H9.42857C9.59048 5.42857 9.72629 5.48343 9.836 5.59314C9.94572 5.70286 10.0004 5.83848 10 6C9.99962 6.16153 9.94476 6.29734 9.83543 6.40743C9.7261 6.51753 9.59048 6.57219 9.42857 6.57143H6.57143V9.42857C6.57143 9.59048 6.51657 9.72629 6.40686 9.836C6.29714 9.94572 6.16153 10.0004 6 10C5.83848 9.99962 5.70286 9.94476 5.59314 9.83543C5.48343 9.7261 5.42857 9.59048 5.42857 9.42857V6.57143Z" fill="${colors.addButtonText}"/>
 </svg>`}
               />
-              <Text fontSize={10} lineHeight={8} fontFamily="Inter" fontWeight={400} fill={colors.addButtonText}>
+              <WidgetText fontSize={10} lineHeight={8} fontFamily="Inter" fontWeight={400} fill={colors.addButtonText}>
                 {block.listType && block.listType !== 'none' ? 'Next list' : 'Add'}
-              </Text>
+              </WidgetText>
             </AutoLayout>
           )}
         </AutoLayout>
@@ -947,9 +751,9 @@ function TodoBlock({
 <path d="M5.42857 6.57143H2.57143C2.40953 6.57143 2.27391 6.51657 2.16457 6.40686C2.05524 6.29714 2.00038 6.16153 2 6C1.99962 5.83848 2.05448 5.70286 2.16457 5.59314C2.27467 5.48343 2.41029 5.42857 2.57143 5.42857H5.42857V2.57143C5.42857 2.40953 5.48343 2.27391 5.59314 2.16457C5.70286 2.05524 5.83848 2.00038 6 2C6.16153 1.99962 6.29734 2.05448 6.40743 2.16457C6.51753 2.27467 6.57219 2.41029 6.57143 2.57143V5.42857H9.42857C9.59048 5.42857 9.72629 5.48343 9.836 5.59314C9.94572 5.70286 10.0004 5.83848 10 6C9.99962 6.16153 9.94476 6.29734 9.83543 6.40743C9.7261 6.51753 9.59048 6.57219 9.42857 6.57143H6.57143V9.42857C6.57143 9.59048 6.51657 9.72629 6.40686 9.836C6.29714 9.94572 6.16153 10.0004 6 10C5.83848 9.99962 5.70286 9.94476 5.59314 9.83543C5.48343 9.7261 5.42857 9.59048 5.42857 9.42857V6.57143Z" fill="${colors.addButtonText}"/>
 </svg>`}
             />
-            <Text fontSize={10} lineHeight={12} fontFamily="Inter" fontWeight={400} fill={colors.addButtonText}>
+            <WidgetText fontSize={10} lineHeight={12} fontFamily="Inter" fontWeight={400} fill={colors.addButtonText}>
               Add list
-            </Text>
+            </WidgetText>
           </AutoLayout>
         )}
       </AutoLayout>
@@ -1092,7 +896,7 @@ function AddBlockMenu({ onAddText, onAddTodo, onAddCode }: { onAddText: () => vo
 </svg>`}
             />
           </Frame>
-          <Text
+          <WidgetText
             name="Notes"
             fill="#FFF"
             verticalAlignText="center"
@@ -1103,7 +907,7 @@ function AddBlockMenu({ onAddText, onAddTodo, onAddCode }: { onAddText: () => vo
             fontWeight={500}
           >
             Notes
-          </Text>
+          </WidgetText>
         </AutoLayout>
       </AutoLayout>
       <SVG
@@ -1157,7 +961,7 @@ function AddBlockMenu({ onAddText, onAddTodo, onAddCode }: { onAddText: () => vo
 </svg>`}
             />
           </Frame>
-          <Text
+          <WidgetText
             name="To-do"
             fill="#FFF"
             verticalAlignText="center"
@@ -1168,7 +972,7 @@ function AddBlockMenu({ onAddText, onAddTodo, onAddCode }: { onAddText: () => vo
             fontWeight={500}
           >
             To-do
-          </Text>
+          </WidgetText>
         </AutoLayout>
       </AutoLayout>
       <SVG
@@ -1219,7 +1023,7 @@ function AddBlockMenu({ onAddText, onAddTodo, onAddCode }: { onAddText: () => vo
               src={codeIcon}
             />
           </Frame>
-          <Text
+          <WidgetText
             name="Code"
             fill="#FFF"
             verticalAlignText="center"
@@ -1230,7 +1034,7 @@ function AddBlockMenu({ onAddText, onAddTodo, onAddCode }: { onAddText: () => vo
             fontWeight={500}
           >
             Code
-          </Text>
+          </WidgetText>
         </AutoLayout>
       </AutoLayout>
     </AutoLayout>
@@ -1295,4 +1099,4 @@ function getIconSymbol(icon: string): string {
   }
 }
 
-widget.register(StickyProWidget);
+widget.register(CodeEditorProWidget);

@@ -1,9 +1,10 @@
 {
-  "name": "Sticky Pro",
+  "name": "code-editor-pro",
   "version": "1.0.0",
   "description": "Your Figma widget",
   "scripts": {
-    "build": "esbuild widget-src/code.tsx --bundle --outfile=dist/code.js --target=es6",
+    "build": "npm run build:ui && esbuild widget-src/code.tsx --bundle --outfile=dist/code.js --target=es6",
+    "build:ui": "esbuild widget-src/ui.tsx --bundle --outfile=dist/ui.js --target=es6 --loader:.js=jsx && cp widget-src/ui.html dist/ui.html",
     "lint": "eslint --ext .ts,.tsx --ignore-pattern node_modules .",
     "lint:fix": "eslint --ext .ts,.tsx --ignore-pattern node_modules --fix .",
     "tsc": "tsc --noEmit -p widget-src",
@@ -15,6 +16,8 @@
     "@figma/eslint-plugin-figma-plugins": "*",
     "@figma/plugin-typings": "*",
     "@figma/widget-typings": "^1.12.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "@typescript-eslint/eslint-plugin": "^6.12.0",
     "@typescript-eslint/parser": "^6.12.0",
     "esbuild": "*",
@@ -42,5 +45,20 @@
         }
       ]
     }
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.10.0",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.11",
+    "@codemirror/lang-javascript": "^6.2.4",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/language": "^6.11.3",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.38.8",
+    "preact": "^10.27.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   }
 }

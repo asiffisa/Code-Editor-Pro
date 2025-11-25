@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Editor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #272822;
+        }
+
+        .language-selector {
+            padding: 12px 16px;
+            background: #2B2B2B;
+            border-bottom: 1px solid #3D3D3D;
+        }
+
+        select {
+            width: 100%;
+            padding: 8px 12px;
+            background: #3D3D3D;
+            color: #FFFFFF;
+            border: 1px solid #4D4D4D;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+            outline: none;
+        }
+
+        select:hover {
+            background: #454545;
+        }
+
+        select:focus {
+            border-color: #BB86FC;
+        }
+
+        .editor-container {
+            height: calc(100vh - 61px);
+            width: 100%;
+        }
+
+        .CodeMirror {
+            height: 100% !important;
+            width: 100% !important;
+            font-family: 'Source Code Pro', 'Courier New', monospace !important;
+            font-size: 13px !important;
+            line-height: 1.5 !important;
+        }
+
+        .CodeMirror-gutters {
+            background: #272822 !important;
+            border-right: 1px solid #3D3D3D !important;
+        }
+
+        .CodeMirror-linenumber {
+            color: #7E7E7E !important;
+            padding: 0 8px !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="language-selector">
+        <select id="language-select">
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="python">Python</option>
+            <option value="html">HTML</option>
+            <option value="css">CSS</option>
+            <option value="json">JSON</option>
+            <option value="markdown">Markdown</option>
+            <option value="xml">XML</option>
+            <option value="sql">SQL</option>
+        </select>
+    </div>
+
+    <div class="editor-container">
+        <textarea id="code-editor"></textarea>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/markdown/markdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/sql/sql.min.js"></script>
+
+    <script>
+        console.log('Initializing Code Editor...');
+
+        const languageSelect = document.getElementById('language-select');
+        const textarea = document.getElementById('code-editor');
+
+        // Language mode mapping
+        const languageModes = {
+            'javascript': 'javascript',
+            'typescript': 'javascript',
+            'python': 'python',
+            'html': 'htmlmixed',
+            'css': 'css',
+            'json': { name: 'javascript', json: true },
+            'markdown': 'markdown',
+            'xml': 'xml',
+            'sql': 'sql'
+        };
+
+        // Initialize CodeMirror
+        const editor = CodeMirror.fromTextArea(textarea, {
+            mode: 'javascript',
+            theme: 'monokai',
+            lineNumbers: true,
+            indentUnit: 2,
+            tabSize: 2,
+            indentWithTabs: false,
+            lineWrapping: true,
+            autofocus: true,
+            matchBrackets: true,
+            autoCloseBrackets: true
+        });
+
+        console.log('CodeMirror initialized');
+
+        // Monokai colors mapping
+        const themeColors = {
+            'keyword': '#F92672',
+            'atom': '#AE81FF',
+            'number': '#AE81FF',
+            'def': '#FD971F',
+            'variable': '#F8F8F2',
+            'variable-2': '#9EFFFF',
+            'variable-3': '#66D9EF',
+            'property': '#A6E22E',
+            'operator': '#F92672',
+            'comment': '#75715E',
+            'string': '#E6DB74',
+            'string-2': '#E6DB74',
+            'meta': '#555555',
+            'builtin': '#66D9EF',
+            'tag': '#F92672',
+            'attribute': '#A6E22E',
+            'header': '#AE81FF',
+            'quote': '#AE81FF',
+            'link': '#AE81FF',
+            'qualifier': '#A6E22E',
+            'type': '#66D9EF',
+            'default': '#F8F8F2'
+        };
+
+        function getHighlightedCode(cm) {
+            const lineCount = cm.lineCount();
+            const lines = [];
+            for (let i = 0; i < lineCount; i++) {
+                const tokens = cm.getLineTokens(i);
+                const lineTokens = tokens.map(token => ({
+                    text: token.string,
+                    color: themeColors[token.type] || themeColors.default
+                }));
+                lines.push(lineTokens);
+            }
+            return lines;
+        }
+
+        // Handle editor changes - sync to widget
+        editor.on('change', (cm) => {
+            const code = cm.getValue();
+            const highlightedLines = getHighlightedCode(cm);
+
+            console.log('Editor changed, syncing code:', code.substring(0, 50) + '...');
+            parent.postMessage({
+                pluginMessage: {
+                    type: 'UPDATE_CODE',
+                    code,
+                    highlightedLines
+                }
+            }, '*');
+        });
+
+        // Handle language changes
+        languageSelect.addEventListener('change', (e) => {
+            const language = e.target.value;
+            const mode = languageModes[language] || 'javascript';
+            editor.setOption('mode', mode);
+            console.log('Language changed to:', language);
+
+            // Get updated highlights immediately
+            const highlightedLines = getHighlightedCode(editor);
+
+            parent.postMessage({
+                pluginMessage: {
+                    type: 'UPDATE_LANGUAGE',
+                    language,
+                    highlightedLines
+                }
+            }, '*');
+        });
+
+        // Handle messages from widget
+        window.onmessage = (event) => {
+            console.log('Received message:', event.data);
+            const { type, payload } = event.data.pluginMessage || {};
+
+            if (type === 'INIT') {
+                console.log('INIT message:', payload);
+                if (payload.code !== undefined) {
+                    editor.setValue(payload.code);
+                }
+                if (payload.language) {
+                    languageSelect.value = payload.language;
+                    const mode = languageModes[payload.language] || 'javascript';
+                    editor.setOption('mode', mode);
+                }
+            }
+        };
+
+        console.log('Code Editor ready');
+    </script>
+</body>
+
+</html>
