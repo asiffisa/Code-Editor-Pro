@@ -1,5 +1,15 @@
+/**
+ * ===================================
+ * SECTION 1: IMPORTS & CONFIGURATION
+ * ===================================
+ */
 const { widget } = figma;
-const { useSyncedState, usePropertyMenu, AutoLayout, Input, Text: WidgetText, SVG, Rectangle, Frame, useEffect } = widget;
+const { useSyncedState, usePropertyMenu, AutoLayout, Input, Text: WidgetText, SVG, useEffect } = widget;
+/**
+ * ===================================
+ * SECTION 2: TYPE DEF INITIONS
+ * ===================================
+ */
 
 // Types
 type BlockType = 'code';
@@ -17,6 +27,13 @@ interface Block {
   highlightedLines?: HighlightedToken[][];
 }
 
+
+/**
+ * ===================================
+ * SECTION 4: UTILITY FUNCTIONS
+ * ===================================
+ */
+
 // Generate unique IDs
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -26,71 +43,66 @@ function escapeXML(str: string) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
-function calculateCodeBlockWidth(blockWidth: number): number {
-  // Account for padding (12px left + 12px right) = 24px total
-  return blockWidth - 24;
-}
 
-function splitTokensByWidth(tokens: HighlightedToken[], containerWidth: number): HighlightedToken[][] {
-  // Monospace font (Source Code Pro) at 13px, roughly 7.8px per character average
-  const charWidth = 7.8;
-  const maxCharsPerLine = Math.floor(containerWidth / charWidth);
 
-  if (maxCharsPerLine <= 0) return [tokens];
+function calculateRequiredWidth(blocks: Block[]): number {
+  let maxLineWidth = 0;
 
-  const wrappedLines: HighlightedToken[][] = [];
-  let currentLine: HighlightedToken[] = [];
-  let currentLineLength = 0;
-
-  for (const token of tokens) {
-    const tokenLength = token.text.length;
-
-    // Check if adding this token exceeds the line width
-    if (currentLineLength + tokenLength > maxCharsPerLine && currentLine.length > 0) {
-      // Push current line and start a new one
-      wrappedLines.push(currentLine);
-      currentLine = [token];
-      currentLineLength = tokenLength;
-    } else {
-      // Add token to current line
-      currentLine.push(token);
-      currentLineLength += tokenLength;
+  blocks.forEach(block => {
+    if (block.type === 'code' && block.highlightedLines) {
+      block.highlightedLines.forEach(line => {
+        const lineLength = line.reduce((acc, token) => acc + token.text.length, 0);
+        const lineWidth = lineLength * CONSTANTS.LAYOUT.CODE_CHAR_WIDTH;
+        if (lineWidth > maxLineWidth) {
+          maxLineWidth = lineWidth;
+        }
+      });
     }
-  }
+  });
 
-  // Push the last line
-  if (currentLine.length > 0) {
-    wrappedLines.push(currentLine);
-  }
+  // Total padding: 24px (Root) + 24px (Block) = 48px
+  const totalPadding = 48;
+  const requiredWidth = maxLineWidth + totalPadding;
 
-  return wrappedLines.length > 0 ? wrappedLines : [tokens];
+  return Math.max(CONSTANTS.LAYOUT.MIN_WIDTH, requiredWidth);
 }
 
-const expandIcon = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M14.1 5.43359L17.7929 9.12649C18.1834 9.51701 18.1834 10.1502 17.7929 10.5407L14.1 14.2336" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M5.7999 5.43359L2.10701 9.12649C1.71649 9.51701 1.71649 10.1502 2.10701 10.5407L5.7999 14.2336" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
+/**
+ * ===================================
+ * SECTION 3: CONSTANTS & THEME
+ * ===================================
+ */
 
-const shrinkIcon = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M18.1998 5.43359L14.5069 9.12649C14.1164 9.51701 14.1164 10.1502 14.5069 10.5407L18.1998 14.2336" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M1.8002 5.43359L5.49309 9.12649C5.88361 9.51701 5.88361 10.1502 5.49309 10.5407L1.8002 14.2336" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
 
-const lightThemeIcon = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g clip-path="url(#clip0_96_3387)">
-<path d="M10.0002 12.4997C10.6946 12.4997 11.2849 12.2566 11.771 11.7705C12.2571 11.2844 12.5002 10.6941 12.5002 9.99968C12.5002 9.30523 12.2571 8.71496 11.771 8.22884C11.2849 7.74273 10.6946 7.49968 10.0002 7.49968C9.30572 7.49968 8.71544 7.74273 8.22933 8.22884C7.74322 8.71496 7.50017 9.30523 7.50017 9.99968C7.50017 10.6941 7.74322 11.2844 8.22933 11.7705C8.71544 12.2566 9.30572 12.4997 10.0002 12.4997ZM10.0002 14.1663C8.84739 14.1663 7.86489 13.76 7.05267 12.9472C6.24044 12.1344 5.83405 11.1519 5.8335 9.99968C5.83294 8.84746 6.23933 7.86495 7.05267 7.05218C7.866 6.2394 8.8485 5.83301 10.0002 5.83301C11.1518 5.83301 12.1346 6.2394 12.9485 7.05218C13.7624 7.86495 14.1685 8.84746 14.1668 9.99968C14.1652 11.1519 13.7588 12.1347 12.9477 12.948C12.1366 13.7613 11.1541 14.1675 10.0002 14.1663ZM1.66683 10.833C1.43072 10.833 1.23294 10.753 1.0735 10.593C0.914055 10.433 0.834055 10.2352 0.833499 9.99968C0.832943 9.76412 0.912943 9.56634 1.0735 9.40634C1.23405 9.24634 1.43183 9.16634 1.66683 9.16634H3.3335C3.56961 9.16634 3.76767 9.24634 3.92767 9.40634C4.08767 9.56634 4.16739 9.76412 4.16683 9.99968C4.16628 10.2352 4.08628 10.4333 3.92683 10.5938C3.76739 10.7544 3.56961 10.8341 3.3335 10.833H1.66683ZM16.6668 10.833C16.4307 10.833 16.2329 10.753 16.0735 10.593C15.9141 10.433 15.8341 10.2352 15.8335 9.99968C15.8329 9.76412 15.9129 9.56634 16.0735 9.40634C16.2341 9.24634 16.4318 9.16634 16.6668 9.16634H18.3335C18.5696 9.16634 18.7677 9.24634 18.9277 9.40634C19.0877 9.56634 19.1674 9.76412 19.1668 9.99968C19.1663 10.2352 19.0863 10.4333 18.9268 10.5938C18.7674 10.7544 18.5696 10.8341 18.3335 10.833H16.6668ZM10.0002 4.16634C9.76406 4.16634 9.56628 4.08634 9.40683 3.92634C9.24739 3.76634 9.16739 3.56857 9.16683 3.33301V1.66634C9.16683 1.43023 9.24683 1.23246 9.40683 1.07301C9.56683 0.913566 9.76461 0.833566 10.0002 0.833011C10.2357 0.832455 10.4338 0.912455 10.5943 1.07301C10.7549 1.23357 10.8346 1.43134 10.8335 1.66634V3.33301C10.8335 3.56912 10.7535 3.76718 10.5935 3.92718C10.4335 4.08718 10.2357 4.1669 10.0002 4.16634ZM10.0002 19.1663C9.76406 19.1663 9.56628 19.0863 9.40683 18.9263C9.24739 18.7663 9.16739 18.5686 9.16683 18.333V16.6663C9.16683 16.4302 9.24683 16.2325 9.40683 16.073C9.56683 15.9136 9.76461 15.8336 10.0002 15.833C10.2357 15.8325 10.4338 15.9125 10.5943 16.073C10.7549 16.2336 10.8346 16.4313 10.8335 16.6663V18.333C10.8335 18.5691 10.7535 18.7672 10.5935 18.9272C10.4335 19.0872 10.2357 19.1669 10.0002 19.1663ZM4.7085 5.87468L3.81267 4.99968C3.646 4.8469 3.566 4.65246 3.57267 4.41634C3.57933 4.18023 3.65933 3.97884 3.81267 3.81218C3.97933 3.64551 4.18072 3.56218 4.41683 3.56218C4.65294 3.56218 4.84739 3.64551 5.00017 3.81218L5.87517 4.70801C6.02794 4.87468 6.10433 5.06912 6.10433 5.29134C6.10433 5.51357 6.02794 5.70801 5.87517 5.87468C5.72239 6.04134 5.53155 6.12134 5.30267 6.11468C5.07378 6.10801 4.87572 6.02801 4.7085 5.87468ZM15.0002 16.1872L14.1252 15.2913C13.9724 15.1247 13.896 14.9269 13.896 14.698C13.896 14.4691 13.9724 14.278 14.1252 14.1247C14.2779 13.958 14.4691 13.8783 14.6985 13.8855C14.9279 13.8927 15.1257 13.9725 15.2918 14.1247L16.1877 14.9997C16.3543 15.1525 16.4343 15.3469 16.4277 15.583C16.421 15.8191 16.341 16.0205 16.1877 16.1872C16.021 16.3538 15.8196 16.4372 15.5835 16.4372C15.3474 16.4372 15.1529 16.3538 15.0002 16.1872ZM14.1252 5.87468C13.9585 5.7219 13.8785 5.53107 13.8852 5.30218C13.8918 5.07329 13.9718 4.87523 14.1252 4.70801L15.0002 3.81218C15.1529 3.64551 15.3474 3.56551 15.5835 3.57218C15.8196 3.57884 16.021 3.65884 16.1877 3.81218C16.3543 3.97884 16.4377 4.18023 16.4377 4.41634C16.4377 4.65246 16.3543 4.8469 16.1877 4.99968L15.2918 5.87468C15.1252 6.02745 14.9307 6.10384 14.7085 6.10384C14.4863 6.10384 14.2918 6.02745 14.1252 5.87468ZM3.81267 16.1872C3.646 16.0205 3.56267 15.8191 3.56267 15.583C3.56267 15.3469 3.646 15.1525 3.81267 14.9997L4.7085 14.1247C4.87517 13.9719 5.07294 13.8955 5.30183 13.8955C5.53072 13.8955 5.72183 13.9719 5.87517 14.1247C6.04183 14.2775 6.12183 14.4686 6.11517 14.698C6.1085 14.9275 6.0285 15.1252 5.87517 15.2913L5.00017 16.1872C4.84739 16.3538 4.65294 16.4338 4.41683 16.4272C4.18072 16.4205 3.97933 16.3405 3.81267 16.1872Z" fill="white"/>
-</g>
-<defs>
-<clipPath id="clip0_96_3387">
-<rect width="100%" height="100%" fill="white"/>
-</clipPath>
-</defs>
-</svg>` ;
+// Constants
+const CONSTANTS = {
+  LAYOUT: {
+    MIN_WIDTH: 500,
+    BLOCK_PADDING: 24,
+    CODE_CHAR_WIDTH: 7.8,
+  },
+  FONTS: {
+    HEADING: 'Inter',
+    CODE: 'Source Code Pro',
+    TEXT: 'Inter',
+  },
+  SIZES: {
+    HEADING: 16,
+    CODE: 13,
+    TEXT: 14,
+    SMALL: 10,
+  },
+} as const;
 
-const darkThemeIcon = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M10 17.5C7.91667 17.5 6.14583 16.7708 4.6875 15.3125C3.22917 13.8542 2.5 12.0833 2.5 10C2.5 7.91667 3.22917 6.14583 4.6875 4.6875C6.14583 3.22917 7.91667 2.5 10 2.5C10.1944 2.5 10.3856 2.50694 10.5733 2.52083C10.7611 2.53472 10.945 2.55556 11.125 2.58333C10.5556 2.98611 10.1006 3.51056 9.76 4.15667C9.41944 4.80278 9.24944 5.50056 9.25 6.25C9.25 7.5 9.6875 8.5625 10.5625 9.4375C11.4375 10.3125 12.5 10.75 13.75 10.75C14.5139 10.75 15.2153 10.5797 15.8542 10.2392C16.4931 9.89861 17.0139 9.44389 17.4167 8.875C17.4444 9.05555 17.4653 9.23944 17.4792 9.42667C17.4931 9.61389 17.5 9.805 17.5 10C17.5 12.0833 16.7708 13.8542 15.3125 15.3125C13.8542 16.7708 12.0833 17.5 10 17.5ZM10 15.8333C11.2222 15.8333 12.3194 15.4964 13.2917 14.8225C14.2639 14.1486 14.9722 13.2703 15.4167 12.1875C15.1389 12.2569 14.8611 12.3125 14.5833 12.3542C14.3056 12.3958 14.0278 12.4167 13.75 12.4167C12.0417 12.4167 10.5867 11.8158 9.385 10.6142C8.18333 9.4125 7.58278 7.95778 7.58333 6.25C7.58333 5.97222 7.60417 5.69444 7.64583 5.41667C7.6875 5.13889 7.74306 4.86111 7.8125 4.58333C6.72917 5.02778 5.85056 5.73611 5.17667 6.70833C4.50278 7.68056 4.16611 8.77778 4.16667 10C4.16667 11.6111 4.73611 12.9861 5.875 14.125C7.01389 15.2639 8.38889 15.8333 10 15.8333Z" fill="white"/>
-</svg>` ;
-
+// Icons
+const ICONS = {
+  lightTheme: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M8 1.33333V2.66667M8 13.3333V14.6667M14.6667 8H13.3333M2.66667 8H1.33333M12.7133 3.28667L11.7733 4.22667M4.22667 11.7733L3.28667 12.7133M12.7133 12.7133L11.7733 11.7733M4.22667 4.22667L3.28667 3.28667M10.6667 8C10.6667 9.47276 9.47276 10.6667 8 10.6667C6.52724 10.6667 5.33333 9.47276 5.33333 8C5.33333 6.52724 6.52724 5.33333 8 5.33333C9.47276 5.33333 10.6667 6.52724 10.6667 8Z" stroke="#98B3B5" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`,
+  darkTheme: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M13.8867 10.5133C13.7867 10.5267 13.6867 10.5333 13.58 10.5333C10.82 10.5333 8.58 8.29333 8.58 5.53333C8.58 4.34667 9.00667 3.25333 9.72 2.4C9.28 2.22667 8.8 2.13333 8.29333 2.13333C5.05333 2.13333 2.42667 4.76 2.42667 8C2.42667 11.24 5.05333 13.8667 8.29333 13.8667C11.16 13.8667 13.5467 11.8267 14.0867 9.12C14.06 9.12 14.0267 9.12 14 9.12C13.96 9.12 13.9267 9.12 13.8867 10.5133Z" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`,
+};
 
 // Theme colors
 const themeColors = {
@@ -108,7 +120,18 @@ const themeColors = {
   }
 };
 
-// Main Widget Component
+
+
+/**
+ * ===================================
+ * SECTION 5: MAIN WIDGET
+ * ===================================
+ */
+
+/**
+ * Main Widget Component
+ * Manages the state and layout of the Code Editor Pro widget.
+ */
 function CodeEditorProWidget() {
   const [mainHeading, setMainHeading] = useSyncedState<string>('mainHeading', '');
   const [blocks, setBlocks] = useSyncedState<Block[]>('blocks', [
@@ -119,7 +142,6 @@ function CodeEditorProWidget() {
       language: 'javascript',
     },
   ]);
-  const [width, setWidth] = useSyncedState<360 | 480>('width', 480);
   const [focusedBlockId, setFocusedBlockId] = useSyncedState<string | null>('focusedBlockId', 'initial-block');
   const [theme, setTheme] = useSyncedState<'dark' | 'light'>('theme', 'dark');
 
@@ -130,30 +152,15 @@ function CodeEditorProWidget() {
   // Note: The position of this menu is controlled by Figma and cannot be changed.
   usePropertyMenu(
     [
-      // Theme and Width toggle (always visible)
+      // Theme toggle (always visible)
       {
         itemType: 'action' as const,
-        tooltip: theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+        tooltip: theme === 'dark' ? 'Light Mode' : 'Dark Mode',
         propertyName: 'toggle-theme',
-        icon: theme === 'dark' ? lightThemeIcon : darkThemeIcon,
-      },
-      {
-        itemType: 'separator' as const,
-      },
-      {
-        itemType: 'action' as const,
-        tooltip: width === 360 ? 'Expand Width' : 'Shrink Width',
-        propertyName: 'toggle-width',
-        icon: width === 360 ? expandIcon : shrinkIcon,
+        icon: theme === 'dark' ? ICONS.lightTheme : ICONS.darkTheme,
       },
     ],
     ({ propertyName }) => {
-      // Handle width toggle
-      if (propertyName === 'toggle-width') {
-        toggleWidth();
-        return;
-      }
-
       // Handle theme toggle
       if (propertyName === 'toggle-theme') {
         setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -181,55 +188,65 @@ function CodeEditorProWidget() {
     setBlocks(blocks.map((b) => b.id === blockId ? { ...b, content, highlightedLines } : b));
   };
 
-  // Toggle width
-  const toggleWidth = () => {
-    setWidth(width === 360 ? 480 : 360);
-  };
+
 
   // Handle messages from UI
   useEffect(() => {
     figma.ui.onmessage = (msg) => {
-      console.log('Widget received message:', msg);
-      if (msg.type === 'UPDATE_CODE') {
-        const { code, highlightedLines } = msg;
-        console.log('Updating code for block:', focusedBlockId, 'Code length:', code?.length);
-        if (focusedBlockId) {
-          updateBlockContent(focusedBlockId, code, highlightedLines);
+      try {
+        console.log('Widget received message:', msg);
+        if (msg.type === 'UPDATE_CODE') {
+          const { code, highlightedLines } = msg;
+          console.log('Updating code for block:', focusedBlockId, 'Code length:', code?.length);
+          if (focusedBlockId) {
+            updateBlockContent(focusedBlockId, code, highlightedLines);
+          }
+        } else if (msg.type === 'UPDATE_LANGUAGE') {
+          const { language, highlightedLines } = msg;
+          if (focusedBlockId) {
+            setBlocks((prev) =>
+              prev.map((b) => (b.id === focusedBlockId ? { ...b, language, highlightedLines } : b))
+            );
+          }
         }
-      } else if (msg.type === 'UPDATE_LANGUAGE') {
-        const { language, highlightedLines } = msg;
-        if (focusedBlockId) {
-          setBlocks((prev) =>
-            prev.map((b) => (b.id === focusedBlockId ? { ...b, language, highlightedLines } : b))
-          );
-        }
+      } catch (error) {
+        console.error('Error handling UI message:', error);
+        figma.notify('An error occurred while updating the code.');
       }
     };
   });
 
   const openCodeEditor = (blockId: string, content: string, language: string = 'javascript') => {
-    return new Promise<void>((resolve) => {
-      // Show UI using the html file from manifest
-      figma.showUI(__html__, { width: 800, height: 500 });
+    return new Promise<void>(() => {
+      try {
+        // Show UI using the html file from manifest
+        figma.showUI(__html__, { width: 800, height: 500 });
 
-      // Send initial data after a short delay to ensure UI is ready
-      setTimeout(() => {
-        figma.ui.postMessage({
-          type: 'INIT',
-          payload: { code: content, language, theme }
-        });
-      }, 100);
+        // Send initial data after a short delay to ensure UI is ready
+        setTimeout(() => {
+          figma.ui.postMessage({
+            type: 'INIT',
+            payload: { code: content, language, theme }
+          });
+        }, 100);
+      } catch (error) {
+        console.error('Error opening code editor:', error);
+        figma.notify('Failed to open code editor');
+      }
     });
   };
 
   // Get current theme colors
   const colors = themeColors[theme];
 
+  // Calculate required width based on content
+  const requiredWidth = calculateRequiredWidth(blocks);
+
   return (
     <AutoLayout
       direction="vertical"
       spacing={0}
-      width={width}
+      width={requiredWidth}
       fill={colors.widgetBg}
       cornerRadius={20}
       overflow="visible"
@@ -238,7 +255,7 @@ function CodeEditorProWidget() {
       <AutoLayout
         direction="vertical"
         spacing={0}
-        width={width}
+        width="fill-parent"
         padding={12}
         fill={colors.widgetBg}
         cornerRadius={20}
@@ -248,7 +265,6 @@ function CodeEditorProWidget() {
         <MainHeading
           value={mainHeading}
           onChange={setMainHeading}
-          width={width - 40}
           theme={theme}
           onFocus={() => {
             setFocusedBlockId(null);
@@ -260,7 +276,6 @@ function CodeEditorProWidget() {
           <BlockComponent
             key={block.id}
             block={block}
-            width={width - 24}
             isFirst={index === 0}
             isFocused={focusedBlockId === block.id}
             theme={theme}
@@ -271,6 +286,7 @@ function CodeEditorProWidget() {
             }}
             onOpenEditor={() => openCodeEditor(block.id, block.content, block.language)}
             onDelete={() => deleteBlock(block.id)}
+
           />
         ))}
 
@@ -279,8 +295,14 @@ function CodeEditorProWidget() {
   );
 }
 
+/**
+ * ===================================
+ * SECTION 6: UI COMPONENTS
+ * ===================================
+ */
+
 // Main Heading Component
-function MainHeading({ value, onChange, width, theme, onFocus }: { value: string; onChange: (v: string) => void; width: number; theme: 'dark' | 'light'; onFocus?: () => void }) {
+function MainHeading({ value, onChange, theme, onFocus }: { value: string; onChange: (v: string) => void; theme: 'dark' | 'light'; onFocus?: () => void }) {
   const colors = themeColors[theme];
 
   return (
@@ -288,18 +310,19 @@ function MainHeading({ value, onChange, width, theme, onFocus }: { value: string
       direction="horizontal"
       spacing={6}
       padding={{ top: 0, bottom: 12, left: 0, right: 0 }}
-      width={width}
+      width="fill-parent"
       onClick={onFocus}
     >
       <Input
+        inputBehavior="multiline"
         value={value}
         placeholder="Header"
         onTextEditEnd={(e) => onChange(e.characters)}
-        fontSize={16}
-        fontFamily="Inter"
+        fontSize={CONSTANTS.SIZES.HEADING}
+        fontFamily={CONSTANTS.FONTS.HEADING}
         fontWeight={600}
         fill={colors.textPrimary}
-        width={width}
+        width="fill-parent"
         inputFrameProps={{
           fill: '#00000000',
           padding: 0,
@@ -309,10 +332,12 @@ function MainHeading({ value, onChange, width, theme, onFocus }: { value: string
   );
 }
 
-// Code Block Component
+/**
+ * Code Block Component
+ * Renders a code block with syntax highlighting support.
+ */
 function BlockComponent({
   block,
-  width,
   isFirst,
   isFocused,
   theme,
@@ -321,13 +346,12 @@ function BlockComponent({
   onOpenEditor,
 }: {
   block: Block;
-  width: number;
   isFirst: boolean;
   isFocused: boolean;
   theme: 'dark' | 'light';
   onFocus: () => void;
   onDelete: () => void;
-  onOpenEditor: () => void;
+  onOpenEditor: () => Promise<void> | void;
 }) {
   const colors = themeColors[theme];
 
@@ -335,8 +359,8 @@ function BlockComponent({
     <AutoLayout
       direction="horizontal"
       spacing={0}
-      width={width}
-      padding={{ top: isFirst ? 0 : 8, bottom: 8, left: 0, right: 0 }}
+      width="fill-parent"
+      padding={{ top: isFirst ? 0 : 8, bottom: 2, left: 0, right: 0 }}
       overflow="visible"
     >
       <AutoLayout
@@ -347,50 +371,47 @@ function BlockComponent({
         fill={colors.blockBg}
         cornerRadius={10}
         overflow="visible"
-        onClick={onFocus}
+        onClick={() => {
+          onFocus();
+          if (onOpenEditor) return onOpenEditor();
+        }}
       >
-        {/* Close button */}
-        {isFocused && <CloseButton onClick={onDelete} />}
-
         {block.highlightedLines ? (
           <AutoLayout
             direction="vertical"
             spacing={2}
             width="fill-parent"
-            onClick={() => {
-              onFocus();
-              if (onOpenEditor) return onOpenEditor();
-            }}
           >
             {block.highlightedLines.map((line, lineIndex) => {
-              // Calculate available width and split long lines
-              const containerWidth = calculateCodeBlockWidth(width);
-              const wrappedLines = splitTokensByWidth(line, containerWidth);
+              // Calculate line width
+              const lineWidth = line.reduce((acc, token) => acc + token.text.length, 0) * CONSTANTS.LAYOUT.CODE_CHAR_WIDTH;
+              // Ensure min width so it's not 0
+              const svgWidth = Math.max(lineWidth, 1);
 
-              return wrappedLines.map((wrappedLine, wrapIndex) => (
+              return (
                 <AutoLayout
-                  key={`line-${lineIndex}-wrap-${wrapIndex}`}
+                  key={`line-${lineIndex}`}
                   direction="horizontal"
                   spacing={0}
                   width="fill-parent"
                   height="hug-contents"
                 >
-                  {wrappedLine.length > 0 ? (
+                  {line.length > 0 ? (
                     <SVG
-                      width="fill-parent"
+                      width={svgWidth}
                       height={18}
                       src={`
-                        <svg width="100%" height="18" xmlns="http://www.w3.org/2000/svg">
-                          <text x="0" y="14" style="font-family: 'Source Code Pro', monospace; font-size: 13px; white-space: pre;">
-                            ${wrappedLine.map(token => `<tspan fill="${token.color}">${escapeXML(token.text)}</tspan>`).join('')}
+                        <svg width="${svgWidth}" height="18" xmlns="http://www.w3.org/2000/svg">
+                          <text x="0" y="14" style="font-family: '${CONSTANTS.FONTS.CODE}', monospace; font-size: ${CONSTANTS.SIZES.CODE}px; white-space: pre;">
+                            ${line.map(token => `<tspan fill="${token.color}">${escapeXML(token.text)}</tspan>`).join('')}
                           </text>
                         </svg>
                       `}
                     />
                   ) : (
                     <WidgetText
-                      fontSize={13}
-                      fontFamily="Source Code Pro"
+                      fontSize={CONSTANTS.SIZES.CODE}
+                      fontFamily={CONSTANTS.FONTS.CODE}
                       fontWeight={400}
                       fill={colors.textSecondary}
                       height={18}
@@ -399,20 +420,16 @@ function BlockComponent({
                     </WidgetText>
                   )}
                 </AutoLayout>
-              ));
+              );
             })}
           </AutoLayout>
         ) : (
           <WidgetText
-            fontSize={14}
-            fontFamily="Source Code Pro"
+            fontSize={CONSTANTS.SIZES.TEXT}
+            fontFamily={CONSTANTS.FONTS.CODE}
             fontWeight={400}
             fill={block.content ? colors.textPrimary : colors.textSecondary}
             width="fill-parent"
-            onClick={() => {
-              onFocus();
-              if (onOpenEditor) return onOpenEditor();
-            }}
           >
             {block.content || '<Type code>'}
           </WidgetText>
@@ -421,626 +438,6 @@ function BlockComponent({
     </AutoLayout>
   );
 }
-
-
-function WidgetTextBlock({
-  block,
-  width,
-  isFirst,
-  isFocused,
-  theme,
-  onFocus,
-  onBlur,
-  onDelete,
-  onContentChange,
-  onInsertAfter,
-  onAddLine,
-  onUpdateLine,
-  onUpdateLineFormat,
-  onDeleteLine,
-  onLineClick,
-  onOpenEditor,
-}: {
-  block: Block;
-  width: number;
-  isFirst: boolean;
-  isFocused: boolean;
-  theme: 'dark' | 'light';
-  onFocus: () => void;
-  onBlur: () => void;
-  onDelete: () => void;
-  onContentChange: (content: string) => void;
-  onInsertAfter?: () => void;
-  onAddLine?: (afterLineId: string) => void;
-  onUpdateLine?: (lineId: string, text: string) => void;
-  onUpdateLineFormat?: (lineId: string, format: TextFormat) => void;
-  onDeleteLine?: (lineId: string) => void;
-  onLineClick?: (lineId: string) => void;
-  onOpenEditor?: () => Promise<void> | void;
-}) {
-  const colors = themeColors[theme];
-
-  // Code blocks use single multi-line input
-  if (block.type === 'code') {
-    return (
-      <AutoLayout
-        direction="horizontal"
-        spacing={0}
-        width={width}
-        padding={{ top: isFirst ? 0 : 8, bottom: 8, left: 0, right: 0 }}
-        overflow="visible"
-      >
-        <AutoLayout
-          direction="vertical"
-          spacing={4}
-          width="fill-parent"
-          padding={{ left: 12, right: 12, top: 12, bottom: 12 }}
-          fill={colors.blockBg}
-          cornerRadius={10}
-          overflow="visible"
-          onClick={onFocus}
-        >
-          {/* Close button */}
-          {isFocused && <CloseButton onClick={onDelete} />}
-
-          {block.highlightedLines ? (
-            <AutoLayout
-              direction="vertical"
-              spacing={2}
-              width="fill-parent"
-              onClick={() => {
-                onFocus();
-                if (onOpenEditor) return onOpenEditor();
-              }}
-            >
-              {block.highlightedLines.map((line, lineIndex) => {
-                // Calculate available width and split long lines
-                const containerWidth = calculateCodeBlockWidth(width);
-                const wrappedLines = splitTokensByWidth(line, containerWidth);
-
-                return wrappedLines.map((wrappedLine, wrapIndex) => (
-                  <AutoLayout
-                    key={`line-${lineIndex}-wrap-${wrapIndex}`}
-                    direction="horizontal"
-                    spacing={0}
-                    width="fill-parent"
-                    height="hug-contents"
-                  >
-                    {wrappedLine.length > 0 ? (
-                      <SVG
-                        width="fill-parent"
-                        height={18}
-                        src={`
-                          <svg width="100%" height="18" xmlns="http://www.w3.org/2000/svg">
-                            <text x="0" y="14" style="font-family: 'Source Code Pro', monospace; font-size: 13px; white-space: pre;">
-                              ${wrappedLine.map(token => `<tspan fill="${token.color}">${escapeXML(token.text)}</tspan>`).join('')}
-                            </text>
-                          </svg>
-                        `}
-                      />
-                    ) : (
-                      <WidgetText
-                        fontSize={13}
-                        fontFamily="Source Code Pro"
-                        fontWeight={400}
-                        fill={colors.textSecondary}
-                        height={18}
-                      >
-                        {' '}
-                      </WidgetText>
-                    )}
-                  </AutoLayout>
-                ));
-              })}
-            </AutoLayout>
-          ) : (
-            <WidgetText
-              fontSize={14}
-              fontFamily="Source Code Pro"
-              fontWeight={400}
-              fill={block.content ? colors.textPrimary : colors.textSecondary}
-              width="fill-parent"
-              onClick={() => {
-                onFocus();
-                if (onOpenEditor) return onOpenEditor();
-              }}
-            >
-              {block.content || '<Type code>'}
-            </WidgetText>
-          )}
-        </AutoLayout>
-      </AutoLayout>
-    );
-  }
-
-  // Text blocks use existing line-based approach
-  const lines = block.lines || [{ id: generateId(), text: block.content || '', format: block.format || 'B1' }];
-  return (
-    <AutoLayout
-      direction="horizontal"
-      spacing={0}
-      width={width}
-      padding={{ top: isFirst ? 0 : 8, bottom: 8, left: 0, right: 0 }}
-      overflow="visible"
-    >
-      <AutoLayout
-        direction="vertical"
-        spacing={4}
-        width="fill-parent"
-        padding={{ left: 12, right: 12, top: 12, bottom: 12 }}
-        fill={colors.blockBg}
-        cornerRadius={10}
-        overflow="visible"
-        onClick={onFocus}
-      >
-        {/* Close button - positioned outside clickable area */}
-        {isFocused && <CloseButton onClick={onDelete} />}
-
-        {/* Clickable area for focusing */}
-        <AutoLayout
-          direction="vertical"
-          spacing={8} // Change this to update gap between text lines
-          width="fill-parent"
-        >
-
-          {/* Multiple Lines */}
-          {lines.map((line, index) => {
-            const { fontSize, fontWeight } = getTextFormat(line.format);
-            const listType = block.listType || 'none';
-
-            return (
-              <AutoLayout
-                key={line.id}
-                direction="horizontal"
-                spacing={8}
-                verticalAlignItems="start"
-                width="fill-parent"
-              >
-                {/* List Marker */}
-                {listType !== 'none' && (
-                  <WidgetText
-                    fontSize={fontSize}
-                    fontFamily="Inter"
-                    fontWeight={fontWeight as 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900}
-                    fill={colors.textPrimary}
-                    width={24}
-                    horizontalAlignText="right"
-                  >
-                    {listType === 'bullet' ? '•' : `${index + 1}.`}
-                  </WidgetText>
-                )}
-
-                <AutoLayout
-                  width="fill-parent"
-                  height="hug-contents"
-                >
-
-                  <Input
-                    inputBehavior="multiline"
-                    placeholder={"Type"}
-                    value={line.text}
-                    onClick={() => {
-                      onFocus();
-                      if (onLineClick) onLineClick(line.id);
-                    }}
-                    onTextEditEnd={(e) => onUpdateLine && onUpdateLine(line.id, e.characters)}
-                    fontSize={fontSize}
-                    fontFamily={block.type === 'code' ? "IBM Plex Mono" : "Inter"}
-                    fontWeight={fontWeight as 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900}
-                    fill={colors.textPrimary}
-                    width="fill-parent"
-                    inputFrameProps={{
-                      fill: '#00000000',
-                      padding: 0,
-                    }}
-                  />
-                </AutoLayout>
-              </AutoLayout>
-            );
-          })}
-
-          {/* Add line button at bottom */}
-          {onAddLine && lines.length > 0 && (
-            <AutoLayout
-              direction="horizontal"
-              spacing={4}
-              padding={{ top: 4, bottom: 0, left: 0, right: 0 }}
-              verticalAlignItems="center"
-              width="hug-contents"
-              onClick={() => {
-                if (lines.length > 0) {
-                  onAddLine(lines[lines.length - 1].id);
-                }
-              }}
-            >
-              <SVG
-                src={`<svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M5.42857 6.57143H2.57143C2.40953 6.57143 2.27391 6.51657 2.16457 6.40686C2.05524 6.29714 2.00038 6.16153 2 6C1.99962 5.83848 2.05448 5.70286 2.16457 5.59314C2.27467 5.48343 2.41029 5.42857 2.57143 5.42857H5.42857V2.57143C5.42857 2.40953 5.48343 2.27391 5.59314 2.16457C5.70286 2.05524 5.83848 2.00038 6 2C6.16153 1.99962 6.29734 2.05448 6.40743 2.16457C6.51753 2.27467 6.57219 2.41029 6.57143 2.57143V5.42857H9.42857C9.59048 5.42857 9.72629 5.48343 9.836 5.59314C9.94572 5.70286 10.0004 5.83848 10 6C9.99962 6.16153 9.94476 6.29734 9.83543 6.40743C9.7261 6.51753 9.59048 6.57219 9.42857 6.57143H6.57143V9.42857C6.57143 9.59048 6.51657 9.72629 6.40686 9.836C6.29714 9.94572 6.16153 10.0004 6 10C5.83848 9.99962 5.70286 9.94476 5.59314 9.83543C5.48343 9.7261 5.42857 9.59048 5.42857 9.42857V6.57143Z" fill="${colors.addButtonText}"/>
-</svg>`}
-              />
-              <WidgetText fontSize={10} lineHeight={8} fontFamily="Inter" fontWeight={400} fill={colors.addButtonText}>
-                {block.listType && block.listType !== 'none' ? 'Next list' : 'Add'}
-              </WidgetText>
-            </AutoLayout>
-          )}
-        </AutoLayout>
-      </AutoLayout>
-    </AutoLayout>
-  );
-}
-
-
-
-// Todo Block Component
-function TodoBlock({
-  block,
-  width,
-  isFirst,
-  onFocus,
-  onBlur,
-  onDelete,
-  onAddTodo,
-  onUpdateTodo,
-  onToggleTodo,
-  onInsertTodoAfter,
-  isFocused,
-  theme,
-}: {
-  block: Block;
-  width: number;
-  isFirst: boolean;
-  isFocused: boolean;
-  theme: 'dark' | 'light';
-  onFocus: () => void;
-  onBlur: () => void;
-  onDelete: () => void;
-  onAddTodo: () => void;
-  onUpdateTodo: (todoId: string, text: string) => void;
-  onToggleTodo: (todoId: string) => void;
-  onInsertTodoAfter?: (todoId: string) => void;
-}) {
-  const colors = themeColors[theme];
-  const todos = block.todos || [];
-
-  return (
-    <AutoLayout
-      direction="vertical"
-      spacing={0}
-      width={width}
-      padding={{ top: isFirst ? 0 : 8, bottom: 8, left: 0, right: 0 }}
-      overflow="visible"
-    >
-      <AutoLayout
-        direction="vertical"
-        spacing={8}
-        width={width}
-        padding={{ left: 12, right: 12, top: 12, bottom: 12 }}
-        fill={colors.blockBg}
-        cornerRadius={10}
-        overflow="visible"
-        onClick={onFocus}
-      >
-        {/* Close button */}
-        {isFocused && <CloseButton onClick={onDelete} />}
-
-        {/* Todo Items */}
-        {todos.map((todo) => (
-          <TodoItem
-            key={todo.id}
-            todo={todo}
-            width={width - 36}
-            theme={theme}
-            onUpdate={(text) => onUpdateTodo(todo.id, text)}
-            onToggle={() => onToggleTodo(todo.id)}
-            onFocus={onFocus}
-          />
-        ))}
-
-        {/* Add Todo Button */}
-        {(isFocused || (todos.length > 0 && todos[todos.length - 1].text.length > 0)) && (
-          <AutoLayout
-            direction="horizontal"
-            spacing={4}
-            padding={{ top: 4, bottom: 0, left: 0, right: 0 }}
-            verticalAlignItems="center"
-            width="hug-contents"
-            onClick={onAddTodo}
-          >
-            <SVG
-              src={`<svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M5.42857 6.57143H2.57143C2.40953 6.57143 2.27391 6.51657 2.16457 6.40686C2.05524 6.29714 2.00038 6.16153 2 6C1.99962 5.83848 2.05448 5.70286 2.16457 5.59314C2.27467 5.48343 2.41029 5.42857 2.57143 5.42857H5.42857V2.57143C5.42857 2.40953 5.48343 2.27391 5.59314 2.16457C5.70286 2.05524 5.83848 2.00038 6 2C6.16153 1.99962 6.29734 2.05448 6.40743 2.16457C6.51753 2.27467 6.57219 2.41029 6.57143 2.57143V5.42857H9.42857C9.59048 5.42857 9.72629 5.48343 9.836 5.59314C9.94572 5.70286 10.0004 5.83848 10 6C9.99962 6.16153 9.94476 6.29734 9.83543 6.40743C9.7261 6.51753 9.59048 6.57219 9.42857 6.57143H6.57143V9.42857C6.57143 9.59048 6.51657 9.72629 6.40686 9.836C6.29714 9.94572 6.16153 10.0004 6 10C5.83848 9.99962 5.70286 9.94476 5.59314 9.83543C5.48343 9.7261 5.42857 9.59048 5.42857 9.42857V6.57143Z" fill="${colors.addButtonText}"/>
-</svg>`}
-            />
-            <WidgetText fontSize={10} lineHeight={12} fontFamily="Inter" fontWeight={400} fill={colors.addButtonText}>
-              Add list
-            </WidgetText>
-          </AutoLayout>
-        )}
-      </AutoLayout>
-    </AutoLayout>
-  );
-}
-
-// Todo Item Component
-function TodoItem({
-  todo,
-  width,
-  theme,
-  onUpdate,
-  onToggle,
-  onFocus,
-}: {
-  todo: TodoItem;
-  width: number;
-  theme: 'dark' | 'light';
-  onUpdate: (text: string) => void;
-  onToggle: () => void;
-  onFocus?: () => void;
-}) {
-  const colors = themeColors[theme];
-
-  return (
-    <AutoLayout
-      direction="horizontal"
-      spacing={12}
-      width={width}
-      verticalAlignItems="center"
-    >
-      {/* Checkbox */}
-      <AutoLayout
-        width={16}
-        height={16}
-        fill={todo.completed ? colors.checkboxFilled : '#00000000'}
-        stroke={todo.completed ? colors.checkboxFilled : colors.checkboxStroke}
-        strokeWidth={1.6}
-        cornerRadius={4}
-        horizontalAlignItems="center"
-        verticalAlignItems="center"
-        onClick={onToggle}
-      >
-        {todo.completed && (
-          <SVG
-            src={`<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M10 3L4.5 8.5L2 6" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`}
-          />
-        )}
-      </AutoLayout>
-
-      {/* Todo Text */}
-      <Input
-        value={todo.text}
-        placeholder={`To do`}
-        onClick={() => {
-          if (onFocus) onFocus();
-        }}
-        onTextEditEnd={(e) => onUpdate(e.characters)}
-        fontSize={14}
-        fontFamily="Inter"
-        fontWeight={400}
-        textDecoration={todo.completed ? 'strikethrough' : 'none'}
-        fill={todo.completed ? colors.todoCompleted : colors.textPrimary}
-        width={width - 24}
-        inputFrameProps={{
-          fill: '#00000000',
-          padding: 0,
-        }}
-      />
-    </AutoLayout>
-  );
-}
-
-
-
-// Add Block Menu Component
-function AddBlockMenu({ onAddText, onAddTodo, onAddCode }: { onAddText: () => void; onAddTodo: () => void; onAddCode: () => void }) {
-  return (
-    <AutoLayout
-      name="AddBlock"
-      cornerRadius={8}
-      verticalAlignItems="center"
-      effect={{
-        type: 'drop-shadow',
-        color: { r: 0, g: 0, b: 0, a: 0.2 },
-        offset: { x: 0, y: 4 },
-        blur: 12,
-      }}
-    >
-      <SVG
-        name="Vector 3372"
-        height="fill-parent"
-        src={`<svg height='40' viewBox='0 0 0 40' fill='none' xmlns='http://www.w3.org/2000/svg'>
-<path d='M0 0V40' stroke='#363636' stroke-width='2'/>
-</svg>`}
-      />
-      <AutoLayout
-        name="Notes section"
-        fill="#151515"
-        overflow="visible"
-        spacing={11}
-        padding={{
-          top: 8,
-          right: 12,
-          bottom: 8,
-          left: 12,
-        }}
-        verticalAlignItems="center"
-      >
-        <AutoLayout
-          name="Notes button"
-          fill="#2D2D2D"
-          cornerRadius={4}
-          overflow="visible"
-          spacing={4}
-          padding={{
-            vertical: 4,
-            horizontal: 8,
-          }}
-          height={24}
-          horizontalAlignItems="center"
-          verticalAlignItems="center"
-          onClick={onAddText}
-          hoverStyle={{ fill: "#3D3D3D" }}
-        >
-          <Frame
-            name="Notes"
-            width={12}
-            height={12}
-          >
-            <SVG
-              name="notes icon"
-              width={12}
-              height={12}
-              src={`<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M8.42576 1.76407C8.55708 1.63275 8.71301 1.52858 8.88461 1.45751C9.05613 1.38644 9.24003 1.34985 9.42581 1.34985C9.61151 1.34985 9.79541 1.38644 9.96693 1.45751C10.1385 1.52858 10.2945 1.63275 10.4258 1.76407C10.5571 1.8954 10.6613 2.05129 10.7323 2.22288C10.8034 2.39445 10.84 2.57835 10.84 2.76407C10.84 2.94979 10.8034 3.13368 10.7323 3.30527C10.6613 3.47685 10.5571 3.63275 10.4258 3.76407L4.55078 9.63908L1.80078 10.3891L2.55078 7.63905L8.42576 1.76407Z" stroke="#7BA7AA" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`}
-            />
-          </Frame>
-          <WidgetText
-            name="Notes"
-            fill="#FFF"
-            verticalAlignText="center"
-            lineHeight={24}
-            fontFamily="Inter"
-            fontSize={12}
-            letterSpacing={0.5}
-            fontWeight={500}
-          >
-            Notes
-          </WidgetText>
-        </AutoLayout>
-      </AutoLayout>
-      <SVG
-        name="divider"
-        height="fill-parent"
-        src={`<svg height='40' viewBox='0 0 0 40' fill='none' xmlns='http://www.w3.org/2000/svg'>
-<path d='M0 0V40' stroke='#363636' stroke-width='2'/>
-</svg>`}
-      />
-      <AutoLayout
-        name="To-do section"
-        fill="#151515"
-        overflow="visible"
-        spacing={11}
-        padding={{
-          top: 8,
-          right: 12,
-          bottom: 8,
-          left: 12,
-        }}
-        verticalAlignItems="center"
-      >
-        <AutoLayout
-          name="To do button"
-          fill="#2D2D2D"
-          cornerRadius={4}
-          overflow="visible"
-          spacing={8}
-          padding={{
-            vertical: 4,
-            horizontal: 8,
-          }}
-          height={24}
-          horizontalAlignItems="center"
-          verticalAlignItems="center"
-          onClick={onAddTodo}
-          hoverStyle={{ fill: "#3D3D3D" }}
-        >
-          <Frame
-            name="to do icon"
-            width={12}
-            height={12}
-          >
-            <SVG
-              name="Tick_box"
-              height={12}
-              width={12}
-              src={`<svg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'>
-<path d='M4 5.29087C4.89297 5.98352 5.36411 6.40284 6.09919 7.25455C7.40407 5.49014 9.0131 3.551 10.5 2' stroke='#7BA7AA' stroke-width='1.13455' stroke-linecap='round' stroke-linejoin='round'/>
-<path d='M7.5 1.5H3.3C2.30589 1.5 1.5 2.30589 1.5 3.3V8.7C1.5 9.69411 2.30589 10.5 3.3 10.5H8.7C9.69411 10.5 10.5 9.69411 10.5 8.7V5.5' stroke='#7BA7AA' stroke-width='0.9' stroke-linecap='round'/>
-</svg>`}
-            />
-          </Frame>
-          <WidgetText
-            name="To-do"
-            fill="#FFF"
-            verticalAlignText="center"
-            lineHeight={24}
-            fontFamily="Inter"
-            fontSize={12}
-            letterSpacing={0.5}
-            fontWeight={500}
-          >
-            To-do
-          </WidgetText>
-        </AutoLayout>
-      </AutoLayout>
-      <SVG
-        name="divider-2"
-        height="fill-parent"
-        src={`<svg height='40' viewBox='0 0 0 40' fill='none' xmlns='http://www.w3.org/2000/svg'>
-<path d='M0 0V40' stroke='#363636' stroke-width='2'/>
-</svg>`}
-      />
-      <AutoLayout
-        name="Code section"
-        fill="#151515"
-        overflow="visible"
-        spacing={11}
-        padding={{
-          top: 8,
-          right: 12,
-          bottom: 8,
-          left: 12,
-        }}
-        verticalAlignItems="center"
-      >
-        <AutoLayout
-          name="Code button"
-          fill="#2D2D2D"
-          cornerRadius={4}
-          overflow="visible"
-          spacing={8}
-          padding={{
-            vertical: 4,
-            horizontal: 8,
-          }}
-          height={24}
-          horizontalAlignItems="center"
-          verticalAlignItems="center"
-          onClick={onAddCode}
-          hoverStyle={{ fill: "#3D3D3D" }}
-        >
-          <Frame
-            name="code icon"
-            width={12}
-            height={12}
-          >
-            <SVG
-              name="code-icon"
-              height={12}
-              width={12}
-              src={codeIcon}
-            />
-          </Frame>
-          <WidgetText
-            name="Code"
-            fill="#FFF"
-            verticalAlignText="center"
-            lineHeight={24}
-            fontFamily="Inter"
-            fontSize={12}
-            letterSpacing={0.5}
-            fontWeight={500}
-          >
-            Code
-          </WidgetText>
-        </AutoLayout>
-      </AutoLayout>
-    </AutoLayout>
-  );
-}
-
 
 
 // Close Button Component
@@ -1068,35 +465,12 @@ function CloseButton({ onClick }: { onClick: () => void }) {
 }
 
 
-// Helper Functions
-function getTextFormat(format: TextFormat): { fontSize: number; fontWeight: number; lineHeight: number } {
-  switch (format) {
-    case 'H1':
-      return { fontSize: 16, fontWeight: 700, lineHeight: 24 };
-    case 'B1':
-      return { fontSize: 14, fontWeight: 400, lineHeight: 22 };
-    case 'C1':
-      return { fontSize: 10, fontWeight: 400, lineHeight: 17 };
-  }
-}
 
-function getIconSymbol(icon: string): string {
-  switch (icon) {
-    case 'bulletList':
-      return '\u2022'; // Bullet
-    case 'numberedList':
-      return '1.';
-    case 'expand':
-      return '< >';
-    case 'collapse':
-      return '> <';
-    case 'theme':
-      return '\u2600'; // Sun
-    case 'dropdown':
-      return '\u25BE'; // Down triangle
-    default:
-      return '';
-  }
-}
+
+/**
+ * ===================================
+ * SECTION 7: REGISTRATION
+ * ===================================
+ */
 
 widget.register(CodeEditorProWidget);

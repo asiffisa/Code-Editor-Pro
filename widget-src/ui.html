@@ -227,6 +227,54 @@
                     const mode = languageModes[payload.language] || 'javascript';
                     editor.setOption('mode', mode);
                 }
+            } else if (type === 'COPY') {
+                // Use modern clipboard API
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(payload.text)
+                        .then(() => {
+                            console.log('Copied successfully via navigator.clipboard');
+                            parent.postMessage({ pluginMessage: { type: 'COPY_SUCCESS' } }, '*');
+                        })
+                        .catch((err) => {
+                            console.error('Failed to copy using clipboard API:', err);
+                            // Fallback to old method
+                            const textArea = document.createElement("textarea");
+                            textArea.value = payload.text;
+                            textArea.style.position = 'fixed';
+                            textArea.style.opacity = '0';
+                            document.body.appendChild(textArea);
+                            textArea.focus();
+                            textArea.select();
+                            try {
+                                const successful = document.execCommand('copy');
+                                console.log('Fallback copy', successful ? 'succeeded' : 'failed');
+                                if (successful) {
+                                    parent.postMessage({ pluginMessage: { type: 'COPY_SUCCESS' } }, '*');
+                                }
+                            } catch (err2) {
+                                console.error('Failed to copy text: ', err2);
+                            }
+                            document.body.removeChild(textArea);
+                        });
+                } else {
+                    // Fallback for older browsers
+                    const textArea = document.createElement("textarea");
+                    textArea.value = payload.text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.opacity = '0';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    try {
+                        const successful = document.execCommand('copy');
+                        if (successful) {
+                            parent.postMessage({ pluginMessage: { type: 'COPY_SUCCESS' } }, '*');
+                        }
+                    } catch (err) {
+                        console.error('Failed to copy text: ', err);
+                    }
+                    document.body.removeChild(textArea);
+                }
             }
         };
 
