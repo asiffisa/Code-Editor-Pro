@@ -78,9 +78,9 @@ function calculateRequiredWidth(blocks: Block[]): number {
 // Constants
 const CONSTANTS = {
   LAYOUT: {
-    MIN_WIDTH: 500,
+    MIN_WIDTH: 400,
     BLOCK_PADDING: 24,
-    CODE_CHAR_WIDTH: 7.8,
+    CODE_CHAR_WIDTH: 8.55,
   },
   FONTS: {
     HEADING: 'Inter',
@@ -89,7 +89,7 @@ const CONSTANTS = {
   },
   SIZES: {
     HEADING: 16,
-    CODE: 13,
+    CODE: 14,
     TEXT: 14,
     SMALL: 10,
   },
@@ -109,7 +109,7 @@ const ICONS = {
 const themeColors = {
   dark: {
     widgetBg: '#000000',
-    blockBg: '#1A1A1A',
+    blockBg: '#1F1F1F',
     textPrimary: '#FFFFFF',
     textSecondary: '#505050',
   },
@@ -124,28 +124,28 @@ const themeColors = {
 // Syntax highlighting color mappings
 const syntaxColors = {
   dark: {
-    'keyword': '#F92672',
-    'atom': '#AE81FF',
-    'number': '#AE81FF',
-    'def': '#FD971F',
-    'variable': '#F8F8F2',
-    'variable-2': '#9EFFFF',
-    'variable-3': '#66D9EF',
-    'property': '#A6E22E',
-    'operator': '#F92672',
-    'comment': '#75715E',
-    'string': '#E6DB74',
-    'string-2': '#E6DB74',
-    'meta': '#555555',
-    'builtin': '#66D9EF',
-    'tag': '#F92672',
-    'attribute': '#A6E22E',
-    'header': '#AE81FF',
-    'quote': '#AE81FF',
-    'link': '#AE81FF',
-    'qualifier': '#A6E22E',
-    'type': '#66D9EF',
-    'default': '#F8F8F2'
+    'keyword': '#569CD6',
+    'atom': '#CE9178',
+    'number': '#B5CEA8',
+    'def': '#DCDCAA',
+    'variable': '#9CDCFE',
+    'variable-2': '#9CDCFE',
+    'variable-3': '#4EC9B0',
+    'property': '#9CDCFE',
+    'operator': '#D4D4D4',
+    'comment': '#6A9955',
+    'string': '#CE9178',
+    'string-2': '#CE9178',
+    'meta': '#C586C0',
+    'builtin': '#4EC9B0',
+    'tag': '#569CD6',
+    'attribute': '#9CDCFE',
+    'header': '#569CD6',
+    'quote': '#6A9955',
+    'link': '#569CD6',
+    'qualifier': '#DCDCAA',
+    'type': '#4EC9B0',
+    'default': '#D4D4D4'
   },
   light: {
     'keyword': '#7F0055',
@@ -246,10 +246,6 @@ function CodeEditorProWidget() {
               prev.map((b) => (b.id === focusedBlockId ? { ...b, language, highlightedLines } : b))
             );
           }
-        } else if (msg.type === 'COPY_SUCCESS') {
-          figma.notify(msg.message || 'Code copied to clipboard!');
-        } else if (msg.type === 'COPY_ERROR') {
-          figma.notify(msg.message || 'Failed to copy code', { error: true });
         }
       } catch (error) {
         console.error('Error handling UI message:', error);
