@@ -7,6 +7,7 @@
     <title>Code Editor</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/eclipse.min.css">
     <style>
         * {
             box-sizing: border-box;
@@ -27,10 +28,13 @@
             padding: 12px 16px;
             background: #2B2B2B;
             border-bottom: 1px solid #3D3D3D;
+            display: flex;
+            gap: 12px;
+            align-items: center;
         }
 
         select {
-            width: 100%;
+            flex: 1;
             padding: 12px 16px;
             padding-right: 40px;
             /* Space for the arrow */
@@ -51,12 +55,64 @@
             appearance: none;
         }
 
-        select:hover {
-            background: #454545;
+        /* Dark theme hover (default) */
+        body:not(.light-theme) select:hover {
+            background-color: #454545;
+        }
+
+        /* Light theme hover */
+        body.light-theme select:hover {
+            background-color: #E5E5E5;
         }
 
         select:focus {
             border-color: #BB86FC;
+        }
+
+        /* Copy Button Styles */
+        .copy-button {
+            height: 48px;
+            width: 48px;
+            min-width: 48px;
+            padding: 0;
+            background-color: #3D3D3D;
+            border: 1px solid #4D4D4D;
+            border-radius: 6px;
+            cursor: pointer;
+            outline: none;
+            display: none;
+            /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+
+        .copy-button.visible {
+            display: flex;
+        }
+
+        /* Dark theme copy button hover */
+        body:not(.light-theme) .copy-button:hover {
+            background-color: #454545;
+        }
+
+        /* Light theme copy button */
+        body.light-theme .copy-button {
+            background-color: #FFFFFF;
+            border-color: #CCCCCC;
+        }
+
+        body.light-theme .copy-button:hover {
+            background-color: #E5E5E5;
+        }
+
+        .copy-button:active {
+            transform: scale(0.95);
+        }
+
+        .copy-button svg {
+            width: 18px;
+            height: 18px;
         }
 
         .editor-container {
@@ -97,6 +153,13 @@
             <option value="xml">XML</option>
             <option value="sql">SQL</option>
         </select>
+        <button id="copy-button" class="copy-button" title="Copy code">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                    d="M12 1.5H3C2.175 1.5 1.5 2.175 1.5 3V12H3V3H12V1.5ZM14.25 4.5H6C5.175 4.5 4.5 5.175 4.5 6V15C4.5 15.825 5.175 16.5 6 16.5H14.25C15.075 16.5 15.75 15.825 15.75 15V6C15.75 5.175 15.075 4.5 14.25 4.5ZM14.25 15H6V6H14.25V15Z"
+                    fill="white" />
+            </svg>
+        </button>
     </div>
 
     <div class="editor-container">
@@ -139,10 +202,9 @@
             'sql': 'sql'
         };
 
-        // Monokai theme color mapping for syntax highlighting
-        // These colors match the Monokai theme in CodeMirror
-        // and are used to generate highlighted tokens for the widget
-        const themeColors = {
+        // Theme color mappings for syntax highlighting
+        // Dark theme (Monokai) - vibrant colors on dark background
+        const darkThemeColors = {
             'keyword': '#F92672',
             'atom': '#AE81FF',
             'number': '#AE81FF',
@@ -166,6 +228,36 @@
             'type': '#66D9EF',
             'default': '#F8F8F2'
         };
+
+        // Light theme (Eclipse) - darker colors on light background
+        const lightThemeColors = {
+            'keyword': '#7F0055',      // Purple for keywords
+            'atom': '#0000FF',         // Blue for atoms/booleans
+            'number': '#0000FF',       // Blue for numbers
+            'def': '#000000',          // Black for definitions
+            'variable': '#000000',     // Black for variables
+            'variable-2': '#0000FF',   // Blue for special variables
+            'variable-3': '#0000FF',   // Blue for type variables
+            'property': '#000000',     // Black for properties
+            'operator': '#000000',     // Black for operators
+            'comment': '#3F7F5F',      // Green for comments
+            'string': '#2A00FF',       // Blue for strings
+            'string-2': '#2A00FF',     // Blue for special strings
+            'meta': '#7F7F9F',         // Gray for meta
+            'builtin': '#7F0055',      // Purple for builtins
+            'tag': '#3F7F7F',          // Teal for tags
+            'attribute': '#7F007F',    // Purple for attributes
+            'header': '#7F0055',       // Purple for headers
+            'quote': '#000000',        // Black for quotes
+            'link': '#0000FF',         // Blue for links
+            'qualifier': '#7F0055',    // Purple for qualifiers
+            'type': '#000000',         // Black for types
+            'default': '#000000'       // Black default
+        };
+
+        // Current theme state
+        let currentTheme = 'dark';
+        let themeColors = darkThemeColors;
 
         // Utility: Debounce function for performance optimization
         function debounce(func, wait) {
@@ -252,7 +344,60 @@
             `;
         }
 
-        // Get syntax-highlighted code as token array
+        // Switch theme between light and dark
+        function switchTheme(theme) {
+            currentTheme = theme;
+
+            if (theme === 'light') {
+                document.body.classList.add('light-theme');
+                document.body.classList.remove('dark-theme');
+                themeColors = lightThemeColors;
+                editor.setOption('theme', 'eclipse');
+                document.body.style.background = '#FFFFFF';
+                document.querySelector('.language-selector').style.background = '#F3F3F3';
+                document.querySelector('.language-selector').style.borderBottom = '1px solid #D0D0D0';
+                document.querySelector('select').style.backgroundColor = '#FFFFFF';
+                document.querySelector('select').style.color = '#000000';
+                document.querySelector('select').style.borderColor = '#CCCCCC';
+                // Update dropdown arrow for light theme
+                document.querySelector('select').style.backgroundImage = "url(\"data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23000000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
+                // Update copy button icon color
+                const copyButtonSvg = document.querySelector('.copy-button svg path');
+                if (copyButtonSvg) {
+                    copyButtonSvg.setAttribute('fill', '#000000');
+                }
+            } else {
+                document.body.classList.add('dark-theme');
+                document.body.classList.remove('light-theme');
+                themeColors = darkThemeColors;
+                editor.setOption('theme', 'monokai');
+                document.body.style.background = '#272822';
+                document.querySelector('.language-selector').style.background = '#2B2B2B';
+                document.querySelector('.language-selector').style.borderBottom = '1px solid #3D3D3D';
+                document.querySelector('select').style.backgroundColor = '#3D3D3D';
+                document.querySelector('select').style.color = '#FFFFFF';
+                document.querySelector('select').style.borderColor = '#4D4D4D';
+                // Update dropdown arrow for dark theme
+                document.querySelector('select').style.backgroundImage = "url(\"data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
+                // Update copy button icon color
+                const copyButtonSvg = document.querySelector('.copy-button svg path');
+                if (copyButtonSvg) {
+                    copyButtonSvg.setAttribute('fill', '#FFFFFF');
+                };
+            }
+
+            // Re-highlight code with new theme colors
+            const highlightedLines = getHighlightedCode(editor);
+            parent.postMessage({
+                pluginMessage: {
+                    type: 'UPDATE_CODE',
+                    code: editor.getValue(),
+                    highlightedLines
+                }
+            }, '*');
+        }
+
+        // Get syntax-highlighted code as token array with types (not colors)
         function getHighlightedCode(cm) {
             const lineCount = cm.lineCount();
             const lines = [];
@@ -260,7 +405,7 @@
                 const tokens = cm.getLineTokens(i);
                 const lineTokens = tokens.map(token => ({
                     text: token.string,
-                    color: themeColors[token.type] || themeColors.default
+                    type: token.type || 'default' // Send type instead of color
                 }));
                 lines.push(lineTokens);
             }
@@ -282,9 +427,58 @@
             }, '*');
         }, CONFIG.DEBOUNCE_DELAY);
 
+        // Copy button functionality
+        const copyButton = document.getElementById('copy-button');
+
+        // Function to update copy button visibility
+        function updateCopyButtonVisibility() {
+            if (editor && copyButton) {
+                const hasContent = editor.getValue().trim().length > 0;
+                if (hasContent) {
+                    copyButton.classList.add('visible');
+                } else {
+                    copyButton.classList.remove('visible');
+                }
+            }
+        }
+
+        // Handle copy button click
+        if (copyButton && editor) {
+            copyButton.addEventListener('click', () => {
+                const code = editor.getValue();
+                if (code.trim().length > 0) {
+                    copyToClipboard(code)
+                        .then(() => {
+                            // Send message to widget to show Figma toast
+                            parent.postMessage({
+                                pluginMessage: {
+                                    type: 'COPY_SUCCESS',
+                                    message: 'Code copied to clipboard!'
+                                }
+                            }, '*');
+                        })
+                        .catch(err => {
+                            console.error('Failed to copy:', err);
+                            parent.postMessage({
+                                pluginMessage: {
+                                    type: 'COPY_ERROR',
+                                    message: 'Failed to copy code'
+                                }
+                            }, '*');
+                        });
+                }
+            });
+        }
+
         // Handle editor changes - sync to widget
         if (editor) {
-            editor.on('change', debouncedChange);
+            editor.on('change', (cm) => {
+                debouncedChange(cm);
+                updateCopyButtonVisibility();
+            });
+
+            // Initial visibility check
+            updateCopyButtonVisibility();
         }
 
         // Handle language changes
@@ -352,6 +546,16 @@
                         languageSelect.value = payload.language;
                         const mode = languageModes[payload.language] || CONFIG.DEFAULT_LANGUAGE;
                         editor.setOption('mode', mode);
+                    }
+
+                    // Apply theme if provided
+                    if (payload.theme) {
+                        switchTheme(payload.theme);
+                    }
+                } else if (type === 'THEME_CHANGE') {
+                    // Handle theme change from widget
+                    if (payload.theme) {
+                        switchTheme(payload.theme);
                     }
                 } else if (type === 'COPY') {
                     if (!payload || !payload.text) {

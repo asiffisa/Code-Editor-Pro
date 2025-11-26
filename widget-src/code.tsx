@@ -17,7 +17,7 @@ type BlockType = 'code';
 
 interface HighlightedToken {
   text: string;
-  color: string;
+  type: string; // Token type for theme-aware coloring
 }
 
 interface Block {
@@ -105,7 +105,7 @@ const ICONS = {
 </svg>`,
 };
 
-// Theme  colors
+// Theme colors for UI elements
 const themeColors = {
   dark: {
     widgetBg: '#000000',
@@ -114,10 +114,62 @@ const themeColors = {
     textSecondary: '#505050',
   },
   light: {
-    widgetBg: '#D4E8EA',
-    blockBg: '#B8D9DC',
+    widgetBg: '#B8D9DC',
+    blockBg: '#D4E8EA',
     textPrimary: '#1A1A1A',
     textSecondary: '#6B8285',
+  }
+};
+
+// Syntax highlighting color mappings
+const syntaxColors = {
+  dark: {
+    'keyword': '#F92672',
+    'atom': '#AE81FF',
+    'number': '#AE81FF',
+    'def': '#FD971F',
+    'variable': '#F8F8F2',
+    'variable-2': '#9EFFFF',
+    'variable-3': '#66D9EF',
+    'property': '#A6E22E',
+    'operator': '#F92672',
+    'comment': '#75715E',
+    'string': '#E6DB74',
+    'string-2': '#E6DB74',
+    'meta': '#555555',
+    'builtin': '#66D9EF',
+    'tag': '#F92672',
+    'attribute': '#A6E22E',
+    'header': '#AE81FF',
+    'quote': '#AE81FF',
+    'link': '#AE81FF',
+    'qualifier': '#A6E22E',
+    'type': '#66D9EF',
+    'default': '#F8F8F2'
+  },
+  light: {
+    'keyword': '#7F0055',
+    'atom': '#0000FF',
+    'number': '#0000FF',
+    'def': '#000000',
+    'variable': '#000000',
+    'variable-2': '#0000FF',
+    'variable-3': '#0000FF',
+    'property': '#000000',
+    'operator': '#000000',
+    'comment': '#3F7F5F',
+    'string': '#2A00FF',
+    'string-2': '#2A00FF',
+    'meta': '#7F7F9F',
+    'builtin': '#7F0055',
+    'tag': '#3F7F7F',
+    'attribute': '#7F007F',
+    'header': '#7F0055',
+    'quote': '#000000',
+    'link': '#0000FF',
+    'qualifier': '#7F0055',
+    'type': '#000000',
+    'default': '#000000'
   }
 };
 
@@ -194,6 +246,10 @@ function CodeEditorProWidget() {
               prev.map((b) => (b.id === focusedBlockId ? { ...b, language, highlightedLines } : b))
             );
           }
+        } else if (msg.type === 'COPY_SUCCESS') {
+          figma.notify(msg.message || 'Code copied to clipboard!');
+        } else if (msg.type === 'COPY_ERROR') {
+          figma.notify(msg.message || 'Failed to copy code', { error: true });
         }
       } catch (error) {
         console.error('Error handling UI message:', error);
@@ -378,7 +434,11 @@ function BlockComponent({
                       src={`
                         <svg width="${svgWidth}" height="18" xmlns="http://www.w3.org/2000/svg">
                           <text x="0" y="14" style="font-family: '${CONSTANTS.FONTS.CODE}', monospace; font-size: ${CONSTANTS.SIZES.CODE}px; white-space: pre;">
-                            ${line.map(token => `<tspan fill="${token.color}">${escapeXML(token.text)}</tspan>`).join('')}
+                            ${line.map(token => {
+                        const themeColorMap = syntaxColors[theme] as Record<string, string>;
+                        const color = themeColorMap[token.type] || themeColorMap['default'];
+                        return `<tspan fill="${color}">${escapeXML(token.text)}</tspan>`;
+                      }).join('')}
                           </text>
                         </svg>
                       `}
