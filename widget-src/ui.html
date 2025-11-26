@@ -31,8 +31,14 @@
 
         select {
             width: 100%;
-            padding: 8px 12px;
-            background: #3D3D3D;
+            padding: 12px 16px;
+            padding-right: 40px;
+            /* Space for the arrow */
+            background-color: #3D3D3D;
+            background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            /* Position arrow 16px from right */
             color: #FFFFFF;
             border: 1px solid #4D4D4D;
             border-radius: 6px;
@@ -40,6 +46,9 @@
             font-family: inherit;
             cursor: pointer;
             outline: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
         }
 
         select:hover {
@@ -106,10 +115,18 @@
     <script>
         console.log('Initializing Code Editor...');
 
+        // Configuration constants
+        const CONFIG = {
+            DEBOUNCE_DELAY: 150,        // ms to wait before syncing changes
+            EDITOR_HEIGHT_OFFSET: 61,   // Height offset for editor container
+            DEFAULT_LANGUAGE: 'javascript',
+            DEFAULT_THEME: 'monokai'
+        };
+
         const languageSelect = document.getElementById('language-select');
         const textarea = document.getElementById('code-editor');
 
-        // Language mode mapping
+        // Language mode mapping for CodeMirror
         const languageModes = {
             'javascript': 'javascript',
             'typescript': 'javascript',
@@ -122,23 +139,9 @@
             'sql': 'sql'
         };
 
-        // Initialize CodeMirror
-        const editor = CodeMirror.fromTextArea(textarea, {
-            mode: 'javascript',
-            theme: 'monokai',
-            lineNumbers: true,
-            indentUnit: 2,
-            tabSize: 2,
-            indentWithTabs: false,
-            lineWrapping: true,
-            autofocus: true,
-            matchBrackets: true,
-            autoCloseBrackets: true
-        });
-
-        console.log('CodeMirror initialized');
-
-        // Monokai colors mapping
+        // Monokai theme color mapping for syntax highlighting
+        // These colors match the Monokai theme in CodeMirror
+        // and are used to generate highlighted tokens for the widget
         const themeColors = {
             'keyword': '#F92672',
             'atom': '#AE81FF',
@@ -164,6 +167,92 @@
             'default': '#F8F8F2'
         };
 
+        // Utility: Debounce function for performance optimization
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Utility: Copy to clipboard with fallback
+        function copyToClipboard(text) {
+            // Try modern API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(text)
+                    .then(() => {
+                        console.log('Copy successful via navigator.clipboard');
+                        parent.postMessage({ pluginMessage: { type: 'COPY_SUCCESS' } }, '*');
+                        return true;
+                    })
+                    .catch(() => fallbackCopy(text));
+            }
+            return fallbackCopy(text);
+        }
+
+        // Fallback copy method using document.execCommand
+        function fallbackCopy(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                console.log('Fallback copy', successful ? 'succeeded' : 'failed');
+                if (successful) {
+                    parent.postMessage({ pluginMessage: { type: 'COPY_SUCCESS' } }, '*');
+                }
+                return successful;
+            } catch (err) {
+                console.error('Failed to copy text:', err);
+                return false;
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+        // Initialize CodeMirror
+        let editor;
+        try {
+            editor = CodeMirror.fromTextArea(textarea, {
+                mode: CONFIG.DEFAULT_LANGUAGE,
+                theme: CONFIG.DEFAULT_THEME,
+                lineNumbers: true,
+                indentUnit: 2,
+                tabSize: 2,
+                indentWithTabs: false,
+                lineWrapping: true,
+                autofocus: true,
+                matchBrackets: true,
+                autoCloseBrackets: true
+            });
+
+            if (!editor) {
+                throw new Error('CodeMirror initialization returned null');
+            }
+
+            console.log('CodeMirror initialized successfully');
+        } catch (error) {
+            console.error('CodeMirror initialization failed:', error);
+            // Show user-friendly error message
+            document.body.innerHTML = `
+                <div style="padding: 20px; color: #ff6b6b; font-family: Inter, sans-serif;">
+                    <h2>Editor Failed to Load</h2>
+                    <p>Please refresh and try again.</p>
+                    <p style="font-size: 12px; color: #999;">Error: ${error.message}</p>
+                </div>
+            `;
+        }
+
+        // Get syntax-highlighted code as token array
         function getHighlightedCode(cm) {
             const lineCount = cm.lineCount();
             const lines = [];
@@ -178,8 +267,8 @@
             return lines;
         }
 
-        // Handle editor changes - sync to widget
-        editor.on('change', (cm) => {
+        // Debounced change handler to reduce message frequency
+        const debouncedChange = debounce((cm) => {
             const code = cm.getValue();
             const highlightedLines = getHighlightedCode(cm);
 
@@ -191,90 +280,88 @@
                     highlightedLines
                 }
             }, '*');
-        });
+        }, CONFIG.DEBOUNCE_DELAY);
+
+        // Handle editor changes - sync to widget
+        if (editor) {
+            editor.on('change', debouncedChange);
+        }
 
         // Handle language changes
-        languageSelect.addEventListener('change', (e) => {
-            const language = e.target.value;
-            const mode = languageModes[language] || 'javascript';
-            editor.setOption('mode', mode);
-            console.log('Language changed to:', language);
+        if (languageSelect && editor) {
+            languageSelect.addEventListener('change', (e) => {
+                try {
+                    const language = e.target.value;
+                    const mode = languageModes[language];
 
-            // Get updated highlights immediately
-            const highlightedLines = getHighlightedCode(editor);
+                    if (!mode) {
+                        console.warn(`Unknown language: ${language}, falling back to ${CONFIG.DEFAULT_LANGUAGE}`);
+                        editor.setOption('mode', CONFIG.DEFAULT_LANGUAGE);
+                    } else {
+                        editor.setOption('mode', mode);
+                    }
 
-            parent.postMessage({
-                pluginMessage: {
-                    type: 'UPDATE_LANGUAGE',
-                    language,
-                    highlightedLines
+                    console.log('Language changed to:', language);
+
+                    // Get updated highlights immediately
+                    const highlightedLines = getHighlightedCode(editor);
+
+                    parent.postMessage({
+                        pluginMessage: {
+                            type: 'UPDATE_LANGUAGE',
+                            language,
+                            highlightedLines
+                        }
+                    }, '*');
+                } catch (error) {
+                    console.error('Error changing language:', error);
                 }
-            }, '*');
-        });
+            });
+        }
 
         // Handle messages from widget
         window.onmessage = (event) => {
-            console.log('Received message:', event.data);
-            const { type, payload } = event.data.pluginMessage || {};
+            try {
+                if (!event || !event.data || !event.data.pluginMessage) {
+                    console.warn('Invalid message received:', event);
+                    return;
+                }
 
-            if (type === 'INIT') {
-                console.log('INIT message:', payload);
-                if (payload.code !== undefined) {
-                    editor.setValue(payload.code);
+                const { type, payload } = event.data.pluginMessage;
+
+                if (!type) {
+                    console.warn('Message missing type:', event.data);
+                    return;
                 }
-                if (payload.language) {
-                    languageSelect.value = payload.language;
-                    const mode = languageModes[payload.language] || 'javascript';
-                    editor.setOption('mode', mode);
-                }
-            } else if (type === 'COPY') {
-                // Use modern clipboard API
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(payload.text)
-                        .then(() => {
-                            console.log('Copied successfully via navigator.clipboard');
-                            parent.postMessage({ pluginMessage: { type: 'COPY_SUCCESS' } }, '*');
-                        })
-                        .catch((err) => {
-                            console.error('Failed to copy using clipboard API:', err);
-                            // Fallback to old method
-                            const textArea = document.createElement("textarea");
-                            textArea.value = payload.text;
-                            textArea.style.position = 'fixed';
-                            textArea.style.opacity = '0';
-                            document.body.appendChild(textArea);
-                            textArea.focus();
-                            textArea.select();
-                            try {
-                                const successful = document.execCommand('copy');
-                                console.log('Fallback copy', successful ? 'succeeded' : 'failed');
-                                if (successful) {
-                                    parent.postMessage({ pluginMessage: { type: 'COPY_SUCCESS' } }, '*');
-                                }
-                            } catch (err2) {
-                                console.error('Failed to copy text: ', err2);
-                            }
-                            document.body.removeChild(textArea);
-                        });
-                } else {
-                    // Fallback for older browsers
-                    const textArea = document.createElement("textarea");
-                    textArea.value = payload.text;
-                    textArea.style.position = 'fixed';
-                    textArea.style.opacity = '0';
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-                    try {
-                        const successful = document.execCommand('copy');
-                        if (successful) {
-                            parent.postMessage({ pluginMessage: { type: 'COPY_SUCCESS' } }, '*');
-                        }
-                    } catch (err) {
-                        console.error('Failed to copy text: ', err);
+
+                console.log('Received message:', type, payload);
+
+                if (type === 'INIT') {
+                    if (!editor) {
+                        console.error('INIT: Editor not initialized');
+                        return;
                     }
-                    document.body.removeChild(textArea);
+
+                    console.log('INIT message:', payload);
+
+                    if (payload.code !== undefined) {
+                        editor.setValue(payload.code);
+                    }
+
+                    if (payload.language) {
+                        languageSelect.value = payload.language;
+                        const mode = languageModes[payload.language] || CONFIG.DEFAULT_LANGUAGE;
+                        editor.setOption('mode', mode);
+                    }
+                } else if (type === 'COPY') {
+                    if (!payload || !payload.text) {
+                        console.error('COPY: Missing text in payload');
+                        return;
+                    }
+                    copyToClipboard(payload.text);
                 }
+            } catch (error) {
+                console.error('Error handling message:', error);
             }
         };
 

@@ -3,6 +3,22 @@
 *.log.*
 node_modules
 
+# Build outputs
 out/
 dist/
 code.js
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
