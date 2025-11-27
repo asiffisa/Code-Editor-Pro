@@ -246,6 +246,10 @@ function CodeEditorProWidget() {
               prev.map((b) => (b.id === focusedBlockId ? { ...b, language, highlightedLines } : b))
             );
           }
+        } else if (msg.type === 'COPY_SUCCESS') {
+          figma.notify('Code copied to clipboard!');
+        } else if (msg.type === 'COPY_ERROR') {
+          figma.notify('Failed to copy code', { error: true });
         }
       } catch (error) {
         console.error('Error handling UI message:', error);
@@ -263,7 +267,7 @@ function CodeEditorProWidget() {
             type: 'INIT',
             payload: { code: content, language, theme }
           });
-        }, 100);
+        }, 250);
       } catch (error) {
         console.error('Error opening code editor:', error);
         figma.notify('Failed to open code editor');
@@ -405,7 +409,7 @@ function BlockComponent({
           }
         }}
       >
-        {block.highlightedLines ? (
+        {block.highlightedLines && block.content ? (
           <AutoLayout
             direction="vertical"
             spacing={2}

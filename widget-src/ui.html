@@ -246,7 +246,7 @@
     </style>
 </head>
 
-<body>
+<body style="background: #1F1F1F; opacity: 0; transition: opacity 0.2s ease;">
     <div class="language-selector">
         <select id="language-select">
             <option value="javascript">JavaScript</option>
@@ -658,6 +658,11 @@
                     if (payload.theme) {
                         switchTheme(payload.theme);
                     }
+
+                    // Fade in the UI smoothly after initialization
+                    requestAnimationFrame(() => {
+                        document.body.style.opacity = '1';
+                    });
                 } else if (type === 'THEME_CHANGE') {
                     // Handle theme change from widget
                     if (payload.theme) {
