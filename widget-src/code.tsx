@@ -202,7 +202,7 @@ function CodeEditorProWidget() {
     [
       {
         itemType: 'action' as const,
-        tooltip: theme === 'dark' ? 'Light Mode' : 'Dark Mode',
+        tooltip: theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode',
         propertyName: 'toggle-theme',
         icon: theme === 'dark' ? ICONS.lightTheme : ICONS.darkTheme,
       },
