@@ -108,7 +108,7 @@ const ICONS = {
 // Theme colors for UI elements
 const themeColors = {
   dark: {
-    widgetBg: '#000000',
+    widgetBg: '#080808',
     blockBg: '#1F1F1F',
     textPrimary: '#FFFFFF',
     textSecondary: '#505050',
