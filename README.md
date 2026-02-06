@@ -5,7 +5,7 @@
 A Figma widget for editing and displaying code with syntax highlighting.
 
 
-![Code editor pro](/Users/asif/Documents/FIgma_plugins/Code_editor_pro/assests/Code editor pro.jpg)
+![Code editor pro](assests/Code%20editor%20pro.jpg)
 
 ## Features
 
