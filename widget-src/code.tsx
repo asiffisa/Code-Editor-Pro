@@ -39,6 +39,31 @@ function escapeXML(str: string) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
+function getTokenColor(tokenType: string, themeColorMap: Record<string, string>): string {
+  if (!tokenType) {
+    return themeColorMap.default;
+  }
+
+  const parts = tokenType.split(/\s+/).filter(Boolean);
+  for (const part of parts) {
+    if (themeColorMap[part]) {
+      return themeColorMap[part];
+    }
+  }
+
+  if (parts.some((part) => part.startsWith('header'))) return themeColorMap.header || themeColorMap.default;
+  if (parts.some((part) => part.startsWith('string'))) return themeColorMap.string || themeColorMap.default;
+  if (parts.some((part) => part.startsWith('variable-2'))) return themeColorMap['variable-2'] || themeColorMap.default;
+  if (parts.some((part) => part.startsWith('variable-3'))) return themeColorMap['variable-3'] || themeColorMap.default;
+  if (parts.some((part) => part.startsWith('variable'))) return themeColorMap.variable || themeColorMap.default;
+  if (parts.some((part) => part.startsWith('comment'))) return themeColorMap.comment || themeColorMap.default;
+  if (parts.some((part) => part.startsWith('tag'))) return themeColorMap.tag || themeColorMap.default;
+  if (parts.some((part) => part.startsWith('attribute'))) return themeColorMap.attribute || themeColorMap.default;
+  if (parts.some((part) => part.startsWith('operator'))) return themeColorMap.operator || themeColorMap.default;
+
+  return themeColorMap.default;
+}
+
 
 
 function calculateRequiredWidth(blocks: Block[]): number {
@@ -140,6 +165,8 @@ const syntaxColors = {
     'link': '#569CD6',
     'qualifier': '#DCDCAA',
     'type': '#4EC9B0',
+    'bracket': '#808080',
+    'error': '#D16969',
     'default': '#D4D4D4'
   },
   light: {
@@ -164,6 +191,8 @@ const syntaxColors = {
     'link': '#0000FF',
     'qualifier': '#7F0055',
     'type': '#000000',
+    'bracket': '#666666',
+    'error': '#A31515',
     'default': '#000000'
   }
 };
@@ -431,7 +460,7 @@ function BlockComponent({
                           <text x="0" y="14" style="font-family: '${CONSTANTS.FONTS.CODE}', monospace; font-size: ${CONSTANTS.SIZES.CODE}px; white-space: pre;">
                             ${line.map(token => {
                         const themeColorMap = syntaxColors[theme] as Record<string, string>;
-                        const color = themeColorMap[token.type] || themeColorMap['default'];
+                        const color = getTokenColor(token.type, themeColorMap);
                         return `<tspan fill="${color}">${escapeXML(token.text)}</tspan>`;
                       }).join('')}
                           </text>

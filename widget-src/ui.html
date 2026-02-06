@@ -267,6 +267,7 @@
             <option value="html">HTML</option>
             <option value="css">CSS</option>
             <option value="json">JSON</option>
+            <option value="rest">REST</option>
             <option value="markdown">Markdown</option>
             <option value="xml">XML</option>
             <option value="sql">SQL</option>
@@ -290,6 +291,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/htmlmixed/htmlmixed.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/http/http.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/markdown/markdown.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/sql/sql.min.js"></script>
 
@@ -310,7 +312,7 @@
         // Language mode mapping for CodeMirror
         const languageModes = {
             'javascript': 'javascript',
-            'typescript': 'javascript',
+            'typescript': { name: 'javascript', typescript: true },
             'python': 'python',
             'html': 'htmlmixed',
             'css': 'css',
@@ -319,6 +321,53 @@
             'xml': 'xml',
             'sql': 'sql'
         };
+
+        // REST supports both raw HTTP messages and JS/TS API snippets.
+        function getModeForLanguage(language, code = '') {
+            if (language === 'rest') {
+                const trimmed = code.trimStart();
+                const isHttpRequest =
+                    /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT)\s+\S+\s+HTTP\/\d\.\d/i.test(trimmed) ||
+                    /^HTTP\/\d\.\d\s+\d{3}/i.test(trimmed);
+                return isHttpRequest ? 'message/http' : 'javascript';
+            }
+            return languageModes[language] || languageModes[CONFIG.DEFAULT_LANGUAGE];
+        }
+
+        function normalizeTokenType(rawType) {
+            if (!rawType || typeof rawType !== 'string') {
+                return 'default';
+            }
+
+            const parts = rawType.split(/\s+/).filter(Boolean);
+            const exactPriority = [
+                'keyword', 'atom', 'number', 'def', 'variable-3', 'variable-2', 'variable',
+                'property', 'operator', 'comment', 'string-2', 'string', 'meta', 'builtin',
+                'tag', 'attribute', 'header', 'quote', 'link', 'qualifier', 'type',
+                'bracket', 'error'
+            ];
+
+            for (const tokenType of exactPriority) {
+                if (parts.includes(tokenType)) {
+                    return tokenType;
+                }
+            }
+
+            if (parts.some((part) => part.startsWith('header'))) return 'header';
+            if (parts.some((part) => part.startsWith('string'))) return 'string';
+            if (parts.some((part) => part.startsWith('variable-2'))) return 'variable-2';
+            if (parts.some((part) => part.startsWith('variable-3'))) return 'variable-3';
+            if (parts.some((part) => part.startsWith('variable'))) return 'variable';
+            if (parts.some((part) => part.startsWith('tag'))) return 'tag';
+            if (parts.some((part) => part.startsWith('attribute'))) return 'attribute';
+            if (parts.some((part) => part.startsWith('comment'))) return 'comment';
+            if (parts.some((part) => part.startsWith('number'))) return 'number';
+            if (parts.some((part) => part.startsWith('keyword'))) return 'keyword';
+            if (parts.some((part) => part.startsWith('operator'))) return 'operator';
+            if (parts.some((part) => part.startsWith('link'))) return 'link';
+
+            return 'default';
+        }
 
         // Theme color mappings for syntax highlighting
         // Dark theme (VS Code Dark Modern)
@@ -523,7 +572,7 @@
                 const tokens = cm.getLineTokens(i);
                 const lineTokens = tokens.map(token => ({
                     text: token.string,
-                    type: token.type || 'default' // Send type instead of color
+                    type: normalizeTokenType(token.type)
                 }));
                 lines.push(lineTokens);
             }
@@ -591,6 +640,13 @@
         // Handle editor changes - sync to widget
         if (editor) {
             editor.on('change', (cm) => {
+                if (languageSelect.value === 'rest') {
+                    const currentMode = editor.getOption('mode');
+                    const nextMode = getModeForLanguage('rest', cm.getValue());
+                    if (JSON.stringify(currentMode) !== JSON.stringify(nextMode)) {
+                        editor.setOption('mode', nextMode);
+                    }
+                }
                 debouncedChange(cm);
                 updateCopyButtonVisibility();
             });
@@ -604,11 +660,11 @@
             languageSelect.addEventListener('change', (e) => {
                 try {
                     const language = e.target.value;
-                    const mode = languageModes[language];
+                    const mode = getModeForLanguage(language, editor.getValue());
 
                     if (!mode) {
                         console.warn(`Unknown language: ${language}, falling back to ${CONFIG.DEFAULT_LANGUAGE}`);
-                        editor.setOption('mode', CONFIG.DEFAULT_LANGUAGE);
+                        editor.setOption('mode', getModeForLanguage(CONFIG.DEFAULT_LANGUAGE, editor.getValue()));
                     } else {
                         editor.setOption('mode', mode);
                     }
@@ -662,7 +718,7 @@
 
                     if (payload.language) {
                         languageSelect.value = payload.language;
-                        const mode = languageModes[payload.language] || CONFIG.DEFAULT_LANGUAGE;
+                        const mode = getModeForLanguage(payload.language, payload.code || editor.getValue());
                         editor.setOption('mode', mode);
                     }
 

@@ -9,7 +9,7 @@ A Figma widget for editing and displaying code with syntax highlighting.
 
 ## Features
 
-- 🎨 **Syntax Highlighting**: Supports multiple programming languages with color-coded syntax (JavaScript, TypeScript, Python, HTML, CSS, JSON, SQL, Markdown, XML)
+- 🎨 **Syntax Highlighting**: Supports multiple programming languages with color-coded syntax (JavaScript, TypeScript, Python, HTML, CSS, JSON, REST, SQL, Markdown, XML)
 - 🌓 **Theme Support**: Toggle between light and dark themes
 - ✏️ **Full-Featured Code Editor**: Click to open a CodeMirror-based editor with line numbers, bracket matching, and auto-completion
 - 💾 **Real-time Sync**: Changes in the editor sync back to the widget instantly with debouncing for performance
