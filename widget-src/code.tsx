@@ -35,11 +35,6 @@ interface Block {
  * ===================================
  */
 
-// Generate unique IDs
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-}
-
 function escapeXML(str: string) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
@@ -370,10 +365,10 @@ function MainHeading({ value, onChange, theme, onFocus }: { value: string; onCha
 function BlockComponent({
   block,
   isFirst,
-  isFocused,
+  isFocused: _isFocused,
   theme,
   onFocus,
-  onDelete,
+  onDelete: _onDelete,
   onOpenEditor,
 }: {
   block: Block;

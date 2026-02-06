@@ -48,10 +48,10 @@ interface BlockComponentProps {
 export function BlockComponent({
     block,
     isFirst,
-    isFocused,
+    isFocused: _isFocused,
     theme,
     onFocus,
-    onDelete,
+    onDelete: _onDelete,
     onOpenEditor,
 }: BlockComponentProps) {
     const colors = themeColors[theme];
